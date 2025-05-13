@@ -1,0 +1,292 @@
+
+
+```{r}
+library(skimr)
+library(readr)
+library(readxl)
+library(dplyr)
+library(sf)
+library(tmap)
+library(ggplot2)
+library(corrplot)
+```
+
+```{r}
+library(readr)
+library(readxl)
+library(dplyr)
+
+# Load and preprocess data
+nanda_selected <- read_csv("/Users/Staff/Desktop/equity in health services/nanda_healthcare_1990-2021_CSVs/nanda_healthcare_Tract20_1990-2021_01P.csv") %>%
+  mutate(tract_fips20 = as.character(tract_fips20),
+         # Remove leading zero if the code has 11 digits
+         tract_fips20 = ifelse(nchar(tract_fips20) == 11 & substr(tract_fips20, 1, 1) == "0", 
+                               substr(tract_fips20, 2, nchar(tract_fips20)), 
+                               tract_fips20)) %>%
+  # Merge with codes directly without storing codes separately
+  left_join(
+    read_excel("EC_AllTracts_V2.xlsx", sheet = "EC_AllTracts_V2", skip = 1) %>%
+      rename(tract_fips20 = `2020 Census Tract Number FIPS code`) %>%
+      mutate(tract_fips20 = as.character(tract_fips20)), 
+    by = "tract_fips20"
+  ) %>%
+  # Select relevant columns only
+  select(
+    tract_fips20, `State Name`, `County or County-Equivalent Entity Name`, year, 
+    totpop, aland20, 
+    count_allphysicians, den_allphysicians, aden_allphysicians, 
+    count_physicalhealthphys, den_physicalhealthphys, 
+    count_mentalhealthphys, den_mentalhealthphys, 
+    count_mentalhealthpractitioners, den_mentalhealthpractitioners, 
+    count_mentalhealthclinics, den_mentalhealthclinics, 
+    count_outpatientclinics, den_outpatientclinics, 
+    count_physicaltherapyclincs, den_physicaltherapyclincs, 
+    count_altmedicinepractitioners, den_altmedicinepractitioners, 
+    count_pharmacies, den_pharmacies, 
+    count_medequipment, den_medequipment, 
+    count_allrescarefacilities, den_allrescarefacilities, 
+    count_resnursingfacilities, den_resnursingfacilities, 
+    count_homehealth, den_homehealth
+  )
+
+# Check the first few rows
+head(nanda_selected)
+
+```
+```{r}
+nanda_selected %>%
+  group_by(`State Name`) %>%
+  summarise(total_physicians = sum(count_allphysicians, na.rm = TRUE),
+            total_clinics = sum(count_outpatientclinics, na.rm = TRUE),
+            total_hospitals = sum(count_allrescarefacilities, na.rm = TRUE)) %>%
+  arrange(desc(total_physicians))
+```
+```{r}
+# Plot population trend over time (mean population per year)
+ggplot(nanda_selected, aes(x = year, y = totpop)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Average Population Over Time",
+       x = "Year",
+       y = "Average Population") +
+  theme_minimal()
+```
+```{r}
+library(ggplot2)
+# 6. **Trends over time: Total Physician Offices/Clinics**
+ggplot(nanda_selected, aes(x = year, y = count_allphysicians)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Total Physician Offices/Clinics Over Time",
+       x = "Year",
+       y = "Average Total Physician Offices/Clinics") +
+  theme_minimal()
+
+# 7. **Trends over time: Physician Offices per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_allphysicians)) +
+  geom_line(stat = "summary", fun = "mean", color = "green", size = 1) +
+  labs(title = "Trend of Physician Offices per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Physician Offices per 1,000 People") +
+  theme_minimal()
+
+```
+
+```{r}
+# 7. **Trends over time: Total Mental Health Physician Offices/Clinics**
+ggplot(nanda_selected, aes(x = year, y = count_mentalhealthphys)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Total Mental Health Physician Offices/Clinics Over Time",
+       x = "Year",
+       y = "Average Total Mental Health Physician Offices/Clinics") +
+  theme_minimal()
+
+# 8. **Trends over time: Mental Health Physician Offices per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_mentalhealthphys)) +
+  geom_line(stat = "summary", fun = "mean", color = "green", size = 1) +
+  labs(title = "Trend of Mental Health Physician Offices per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Mental Health Physician Offices per 1,000 People") +
+  theme_minimal()
+
+# 9. **Trends over time: Total Non-MD Mental Health Practitioner Offices**
+ggplot(nanda_selected, aes(x = year, y = count_mentalhealthpractitioners)) +
+  geom_line(stat = "summary", fun = "mean", color = "red", size = 1) +
+  labs(title = "Trend of Total Non-MD Mental Health Practitioner Offices Over Time",
+       x = "Year",
+       y = "Average Total Non-MD Mental Health Practitioner Offices") +
+  theme_minimal()
+
+# 10. **Trends over time: Non-MD Mental Health Practitioners per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_mentalhealthpractitioners)) +
+  geom_line(stat = "summary", fun = "mean", color = "purple", size = 1) +
+  labs(title = "Trend of Non-MD Mental Health Practitioners per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Non-MD Mental Health Practitioners per 1,000 People") +
+  theme_minimal()
+
+# 11. **Trends over time: Total Outpatient Mental Health Clinics & Substance Abuse Clinics**
+ggplot(nanda_selected, aes(x = year, y = count_mentalhealthclinics)) +
+  geom_line(stat = "summary", fun = "mean", color = "orange", size = 1) +
+  labs(title = "Trend of Total Outpatient Mental Health Clinics & Substance Abuse Clinics Over Time",
+       x = "Year",
+       y = "Average Total Outpatient Mental Health Clinics & Substance Abuse Clinics") +
+  theme_minimal()
+
+# 12. **Trends over time: Mental Health Clinics per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_mentalhealthclinics)) +
+  geom_line(stat = "summary", fun = "mean", color = "yellow", size = 1) +
+  labs(title = "Trend of Mental Health Clinics per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Mental Health Clinics per 1,000 People") +
+  theme_minimal()
+
+```
+
+```{r}
+# 1. **Trends over time: Total Outpatient Clinics**
+ggplot(nanda_selected, aes(x = year, y = count_outpatientclinics)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Total Outpatient Clinics Over Time",
+       x = "Year",
+       y = "Average Total Outpatient Clinics") +
+  theme_minimal()
+
+# 2. **Trends over time: Outpatient Clinics per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_outpatientclinics)) +
+  geom_line(stat = "summary", fun = "mean", color = "green", size = 1) +
+  labs(title = "Trend of Outpatient Clinics per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Outpatient Clinics per 1,000 People") +
+  theme_minimal()
+
+# 3. **Trends over time: Total Physical Therapy and Rehab Clinics**
+ggplot(nanda_selected, aes(x = year, y = count_physicaltherapyclincs)) +
+  geom_line(stat = "summary", fun = "mean", color = "red", size = 1) +
+  labs(title = "Trend of Total Physical Therapy and Rehab Clinics Over Time",
+       x = "Year",
+       y = "Average Total Physical Therapy Clinics") +
+  theme_minimal()
+
+# 4. **Trends over time: Physical Therapy Clinics per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_physicaltherapyclincs)) +
+  geom_line(stat = "summary", fun = "mean", color = "purple", size = 1) +
+  labs(title = "Trend of Physical Therapy Clinics per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Physical Therapy Clinics per 1,000 People") +
+  theme_minimal()
+
+# 5. **Trends over time: Total Alternative Medicine Offices**
+ggplot(nanda_selected, aes(x = year, y = count_altmedicinepractitioners)) +
+  geom_line(stat = "summary", fun = "mean", color = "orange", size = 1) +
+  labs(title = "Trend of Total Alternative Medicine Offices Over Time",
+       x = "Year",
+       y = "Average Total Alternative Medicine Offices") +
+  theme_minimal()
+
+# 6. **Trends over time: Alternative Medicine Offices per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_altmedicinepractitioners)) +
+  geom_line(stat = "summary", fun = "mean", color = "yellow", size = 1) +
+  labs(title = "Trend of Alternative Medicine Offices per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Alternative Medicine Offices per 1,000 People") +
+  theme_minimal()
+
+```
+```{r}
+# 1. **Trends over time: Total Retail Pharmacies and Drug Stores**
+ggplot(nanda_selected, aes(x = year, y = count_pharmacies)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Total Retail Pharmacies and Drug Stores Over Time",
+       x = "Year",
+       y = "Average Total Retail Pharmacies") +
+  theme_minimal()
+
+# 2. **Trends over time: Pharmacies per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_pharmacies)) +
+  geom_line(stat = "summary", fun = "mean", color = "green", size = 1) +
+  labs(title = "Trend of Pharmacies per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Pharmacies per 1,000 People") +
+  theme_minimal()
+
+# 3. **Trends over time: Total Medical Equipment Suppliers**
+ggplot(nanda_selected, aes(x = year, y = count_medequipment)) +
+  geom_line(stat = "summary", fun = "mean", color = "red", size = 1) +
+  labs(title = "Trend of Total Medical Equipment Suppliers Over Time",
+       x = "Year",
+       y = "Average Total Medical Equipment Suppliers") +
+  theme_minimal()
+
+# 4. **Trends over time: Medical Equipment Suppliers per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_medequipment)) +
+  geom_line(stat = "summary", fun = "mean", color = "purple", size = 1) +
+  labs(title = "Trend of Medical Equipment Suppliers per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Medical Equipment Suppliers per 1,000 People") +
+  theme_minimal()
+
+```
+```{r}
+# 1. **Trends over time: Total Residential Care Facilities**
+ggplot(nanda_selected, aes(x = year, y = count_allrescarefacilities)) +
+  geom_line(stat = "summary", fun = "mean", color = "blue", size = 1) +
+  labs(title = "Trend of Total Residential Care Facilities Over Time",
+       x = "Year",
+       y = "Average Total Residential Care Facilities") +
+  theme_minimal()
+
+# 2. **Trends over time: Residential Care Facilities per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_allrescarefacilities)) +
+  geom_line(stat = "summary", fun = "mean", color = "green", size = 1) +
+  labs(title = "Trend of Residential Care Facilities per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Residential Care Facilities per 1,000 People") +
+  theme_minimal()
+
+# 3. **Trends over time: Total Nursing Homes**
+ggplot(nanda_selected, aes(x = year, y = count_resnursingfacilities)) +
+  geom_line(stat = "summary", fun = "mean", color = "red", size = 1) +
+  labs(title = "Trend of Total Nursing Homes Over Time",
+       x = "Year",
+       y = "Average Total Nursing Homes") +
+  theme_minimal()
+
+# 4. **Trends over time: Nursing Homes per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_resnursingfacilities)) +
+  geom_line(stat = "summary", fun = "mean", color = "purple", size = 1) +
+  labs(title = "Trend of Nursing Homes per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Nursing Homes per 1,000 People") +
+  theme_minimal()
+
+# 5. **Trends over time: Total Home Health Services**
+ggplot(nanda_selected, aes(x = year, y = count_homehealth)) +
+  geom_line(stat = "summary", fun = "mean", color = "orange", size = 1) +
+  labs(title = "Trend of Total Home Health Services Over Time",
+       x = "Year",
+       y = "Average Total Home Health Services") +
+  theme_minimal()
+
+# 6. **Trends over time: Home Health Services per 1,000 People**
+ggplot(nanda_selected, aes(x = year, y = den_homehealth)) +
+  geom_line(stat = "summary", fun = "mean", color = "pink", size = 1) +
+  labs(title = "Trend of Home Health Services per 1,000 People Over Time",
+       x = "Year",
+       y = "Average Home Health Services per 1,000 People") +
+  theme_minimal()
+
+```
+```{r}
+# Correlation matrix for selected variables
+correlation_matrix <- nanda_selected %>%
+  select(count_allphysicians, den_allphysicians, count_physicalhealthphys, den_physicalhealthphys, 
+         count_mentalhealthphys, den_mentalhealthphys, count_outpatientclinics, den_outpatientclinics,
+         count_pharmacies, den_pharmacies, count_homehealth, den_homehealth) %>%
+  cor(use = "complete.obs")
+
+# Visualize correlation matrix
+corrplot(correlation_matrix, method = "circle")
+
+```
+
+
+

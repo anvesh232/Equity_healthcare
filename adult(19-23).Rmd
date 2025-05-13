@@ -1,0 +1,736 @@
+```{r}
+library(readr)
+adult19 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2019/adult19.csv")
+adult20 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2020/adult20.csv")
+adult21 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2021/adult21.csv")
+adult22 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2022/adult22.csv")
+adult23 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2023/adult23.csv")
+```
+
+```{r}
+selected_columns <- c(
+  # Urban vs. Rural Focus
+  "URBRRL", "REGION",
+  
+  # Demographics and Socioeconomic Factors
+  "AGEP_A", "SEX_A", 
+  "HISP_A", "RACEALLP_A", "HISPALLP_A", 
+  "EDUC_A", "MAXEDUC_A", 
+  "FAMINCTC_A", "POVRATTC_A", "RATCAT_A", 
+  "EMPWRKFT_A", "EMPWRKHRS2_A",
+  
+  # Healthcare Access and Utilization
+  "HICOV_A", "NOTCOV_A", "PRIVATE_A", "MEDICARE_A", "MEDICAID_A", 
+  "USUALPL_A", "USPLKIND_A", 
+  "LASTDR_A", "URGNT12MTC_A", "EMERG12MTC_A",
+  
+  # Health Outcomes and Limitations
+  "PHSTAT_A", 
+  "HYPEV_A", "CHLEV_A", "DIABETIC_A", "COPDEV_A", 
+  "DIFF_A", "VISIONDF_A", "COGMEMDFF_A",
+  
+  # Economic Barriers
+  "PAYBLL12M_A", "MEDDL12M_A", "MEDNG12M_A", 
+  "FSNAP12M_A", "FWIC12M_A"
+)
+```
+
+```{r}
+library(dplyr)
+common_columns <- Reduce(intersect, list(
+  colnames(adult19), 
+  colnames(adult20), 
+  colnames(adult21), 
+  colnames(adult22), 
+  colnames(adult23)
+))
+adult19_selected <- adult19 %>% select(all_of(common_columns)) %>% mutate(year = 2019)
+adult20_selected <- adult20 %>% select(all_of(common_columns)) %>% mutate(year = 2020)
+adult21_selected <- adult21 %>% select(all_of(common_columns)) %>% mutate(year = 2021)
+adult22_selected <- adult22 %>% select(all_of(common_columns)) %>% mutate(year = 2022)
+adult23_selected <- adult23 %>% select(all_of(common_columns)) %>% mutate(year = 2023)
+
+combined_adult_data <- bind_rows(
+  adult19_selected,
+  adult20_selected,
+  adult21_selected,
+  adult22_selected,
+  adult23_selected
+)
+
+filtered_combined_data <- combined_adult_data %>% 
+  select(any_of(c(selected_columns, "year")))
+rm(adult19, adult20, adult21, adult22, adult23)
+rm(adult19_selected, adult20_selected, adult21_selected, adult22_selected, adult23_selected)
+rm(combined_adult_data)
+```
+
+```{r}
+names(filtered_combined_data)
+```
+
+```{r}
+library(dplyr)
+library(forcats)
+
+# Define mapping lists for each coded column
+decode_mappings <- list(
+  URBRRL = c("1" = "Large central metro", "2" = "Large fringe metro", 
+             "3" = "Medium and small metro", "4" = "Nonmetropolitan"),
+  REGION = c("1" = "Northeast", "2" = "Midwest", "3" = "South", "4" = "West"),
+  SEX_A = c("1" = "Male", "2" = "Female", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HISP_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  RACEALLP_A = c("1" = "White only", "2" = "Black/African American only", "3" = "Asian only", 
+                 "4" = "AIAN only and any other group", "6" = "Other single and multiple races", 
+                 "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HISPALLP_A = c("01" = "Hispanic", "02" = "NH White only", "03" = "NH Black/African American only", 
+                 "04" = "NH Asian only", "05" = "NH AIAN only", "06" = "NH AIAN and any other group",
+                 "07" = "Other single and multiple races", "97" = "Refused", "98" = "Not Ascertained", "99" = "Don't Know"),
+  HICOV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  NOTCOV_A = c("1" = "Not covered", "2" = "Covered", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PRIVATE_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDICARE_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                 "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDICAID_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                 "8" = "Not Ascertained", "9" = "Don't Know"),
+  USUALPL_A = c("1" = "Yes", "2" = "There is NO place", "3" = "There is MORE THAN ONE place", 
+                "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  USPLKIND_A = c("1" = "Doctor's office or health center", "2" = "Urgent care center", 
+                 "3" = "Hospital emergency room", "4" = "VA Medical Center", "5" = "Some other place",
+                 "6" = "Does not go to one place most often", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PHSTAT_A = c("1" = "Excellent", "2" = "Very Good", "3" = "Good", "4" = "Fair", "5" = "Poor", 
+               "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HYPEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  CHLEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  COPDEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  DIFF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+             "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  VISIONDF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+                 "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  COGMEMDFF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+                  "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PAYBLL12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDDL12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDNG12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  FSNAP12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  FWIC12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know")
+)
+
+# Manually apply the decode mappings to each column
+filtered_combined_data <- filtered_combined_data %>%
+  mutate(
+    URBRRL = recode(URBRRL, !!!decode_mappings$URBRRL),
+    REGION = recode(REGION, !!!decode_mappings$REGION),
+    SEX_A = recode(SEX_A, !!!decode_mappings$SEX_A),
+    HISP_A = recode(HISP_A, !!!decode_mappings$HISP_A),
+    RACEALLP_A = recode(RACEALLP_A, !!!decode_mappings$RACEALLP_A),
+    HISPALLP_A = recode(HISPALLP_A, !!!decode_mappings$HISPALLP_A),
+    HICOV_A = recode(HICOV_A, !!!decode_mappings$HICOV_A),
+    NOTCOV_A = recode(NOTCOV_A, !!!decode_mappings$NOTCOV_A),
+    PRIVATE_A = recode(PRIVATE_A, !!!decode_mappings$PRIVATE_A),
+    MEDICARE_A = recode(MEDICARE_A, !!!decode_mappings$MEDICARE_A),
+    MEDICAID_A = recode(MEDICAID_A, !!!decode_mappings$MEDICAID_A),
+    USUALPL_A = recode(USUALPL_A, !!!decode_mappings$USUALPL_A),
+    USPLKIND_A = recode(USPLKIND_A, !!!decode_mappings$USPLKIND_A),
+    PHSTAT_A = recode(PHSTAT_A, !!!decode_mappings$PHSTAT_A),
+    HYPEV_A = recode(HYPEV_A, !!!decode_mappings$HYPEV_A),
+    CHLEV_A = recode(CHLEV_A, !!!decode_mappings$CHLEV_A),
+    COPDEV_A = recode(COPDEV_A, !!!decode_mappings$COPDEV_A),
+    DIFF_A = recode(DIFF_A, !!!decode_mappings$DIFF_A),
+    VISIONDF_A = recode(VISIONDF_A, !!!decode_mappings$VISIONDF_A),
+    COGMEMDFF_A = recode(COGMEMDFF_A, !!!decode_mappings$COGMEMDFF_A),
+    PAYBLL12M_A = recode(PAYBLL12M_A, !!!decode_mappings$PAYBLL12M_A),
+    MEDDL12M_A = recode(MEDDL12M_A, !!!decode_mappings$MEDDL12M_A),
+    MEDNG12M_A = recode(MEDNG12M_A, !!!decode_mappings$MEDNG12M_A),
+    FSNAP12M_A = recode(FSNAP12M_A, !!!decode_mappings$FSNAP12M_A),
+    FWIC12M_A = recode(FWIC12M_A, !!!decode_mappings$FWIC12M_A)
+  )
+
+# Convert AGEP_A to numeric since it represents age
+filtered_combined_data <- filtered_combined_data %>% mutate(AGEP_A = as.numeric(AGEP_A))
+
+```
+
+```{r}
+# Create a named vector for the new column names
+new_column_names <- c(
+  URBRRL = "Urban-Rural",
+  REGION = "Region",
+  AGEP_A = "Age",
+  SEX_A = "Sex",
+  HISP_A = "Hispanic",
+  RACEALLP_A = "race",
+  HISPALLP_A = "race with Hispanic origin",
+  POVRATTC_A = "SA family poverty ratio (top-coded)",
+  RATCAT_A = "Ratio of family income to poverty threshold for SA's family",
+  HICOV_A = "health insurance",
+  NOTCOV_A = "Coverage status",
+  PRIVATE_A = "Private health insurance",
+  MEDICARE_A = "Medicare recode",
+  MEDICAID_A = "Medicaid recode",
+  USUALPL_A = "Have a usual place to go for care",
+  USPLKIND_A = "Type of place for usual care",
+  LASTDR_A = "Time since last saw doctor",
+  URGNT12MTC_A = "Number of times visited urgent care, past 12m, top-coded",
+  EMERG12MTC_A = "Number of times visited hospital emergency room, past 12m, top-coded",
+  PHSTAT_A = "General health status",
+  HYPEV_A = "Ever been told you had hypertension",
+  CHLEV_A = "Ever told you had high cholesterol",
+  COPDEV_A = "Ever been told you had COPD, emphysema, or chronic bronchitis",
+  DIFF_A = "Difficulty walking/steps",
+  VISIONDF_A = "Difficulty seeing",
+  COGMEMDFF_A = "Difficulty remembering/concentrating",
+  PAYBLL12M_A = "Problems paying medical bills, past 12m",
+  MEDDL12M_A = "Delayed medical care due to cost, past 12m",
+  MEDNG12M_A = "Needed medical care but did not get it due to cost, past 12m",
+  FSNAP12M_A = "Receive food stamps, past 12m",
+  FWIC12M_A = "Receive WIC benefits, past 12m",
+  year = "Year"
+)
+
+# Rename the columns in the dataset
+colnames(filtered_combined_data) <- new_column_names
+
+```
+
+```{r}
+library(ggplot2)
+
+# Age distribution (updated column name: AGEP_A -> Age of SA (top coded))
+ggplot(filtered_combined_data, aes(x = `Age`)) + 
+  geom_histogram(binwidth = 1, fill = "skyblue", color = "black") +
+  theme_minimal() + 
+  labs(title = "Age Distribution", x = "Age", y = "Frequency")
+
+# Health status distribution (updated column name: PHSTAT_A -> General health status)
+ggplot(filtered_combined_data, aes(x = `General health status`)) + 
+  geom_bar(fill = "lightcoral") +
+  theme_minimal() + 
+  labs(title = "Health Status Distribution", x = "Health Status", y = "Frequency")
+
+```
+
+```{r}
+# Count the occurrences of all unique values in the 'Sex of Sample Adult' column
+sex_counts <- filtered_combined_data %>%
+  group_by(`Sex`) %>%
+  tally()
+
+# Create a table with the counts for each category
+sex_table <- sex_counts %>%
+  rename(Gender = `Sex`, Count = n)
+
+# Display the table
+sex_table
+
+```
+
+```{r}
+# Correlation matrix for numeric columns
+correlation_matrix <- cor(filtered_combined_data %>% select(where(is.numeric)), use = "complete.obs")
+
+# Visualize the correlation matrix with rotated labels
+library(corrplot)
+corrplot(correlation_matrix, method = "circle", 
+         tl.cex = 0.6, # Adjust the size of the labels
+         tl.srt = 45)  # Rotate the labels for better readability
+
+```
+```{r}
+# Boxplot for Age
+ggplot(filtered_combined_data, aes(x = "", y = Age)) + 
+  geom_boxplot(fill = "lightblue", color = "black") +
+  theme_minimal() + 
+  labs(title = "Boxplot of Age", x = "", y = "Age") +
+  theme(axis.title.x = element_blank())  # Remove x-axis label
+
+```
+
+
+
+
+
+```{r}
+library(dplyr)
+
+# Count the number of occurrences for each year
+yearly_count <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarise(Count = n())
+
+# View the result
+print(yearly_count)
+
+```
+
+
+```{r}
+# Group by year, age, and race to analyze the ratios
+library(dplyr)
+
+yearly_analysis <- filtered_combined_data %>%
+  group_by(Year, Age, race) %>%
+  summarise(
+    avg_poverty_ratio = mean(`SA family poverty ratio (top-coded)`, na.rm = TRUE),
+    avg_income_poverty_ratio = mean(`Ratio of family income to poverty threshold for SA's family`, na.rm = TRUE),
+    .groups = 'drop'
+  )
+# Summarize data to get the average values by year
+yearly_analysis <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarize(
+    avg_poverty_ratio = mean(as.numeric(`SA family poverty ratio (top-coded)`), na.rm = TRUE),
+    avg_income_poverty_ratio = mean(as.numeric(`Ratio of family income to poverty threshold for SA's family`), na.rm = TRUE)
+  )
+
+# Line plot for average poverty ratio and income-to-poverty ratio across years
+ggplot(yearly_analysis, aes(x = Year)) +
+  geom_line(aes(y = avg_poverty_ratio, color = "Poverty Ratio"), size = 1) +
+  geom_line(aes(y = avg_income_poverty_ratio, color = "Income-to-Poverty Ratio"), size = 1) +
+  labs(title = "Yearly Trends of Poverty Ratio and Income-to-Poverty Ratio",
+       x = "Year", y = "Average Ratio") +
+  scale_color_manual(values = c("Poverty Ratio" = "blue", "Income-to-Poverty Ratio" = "red")) +
+  theme_minimal()
+#poverty ratio:above 1.0, indicating that the families are far from the poverty threshold
+#income-to-poverty ratio: good
+
+ggplot(filtered_combined_data, aes(x = as.factor(Age), y = `SA family poverty ratio (top-coded)`)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Poverty Ratio by Age", x = "Age", y = "Poverty Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+race_analysis <- filtered_combined_data %>%
+  group_by(race) %>%
+  summarise(avg_poverty_ratio = mean(`SA family poverty ratio (top-coded)`, na.rm = TRUE))
+
+# Bar plot for Poverty Ratio by Race in descending order (high to low)
+ggplot(race_analysis, aes(x = reorder(race, -avg_poverty_ratio), y = avg_poverty_ratio, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Poverty Ratio by Race",
+       x = "Race", y = "Average Poverty Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Slant the x-axis titles
+
+# Group ages into categories
+filtered_combined_data$age_group <- cut(as.numeric(filtered_combined_data$Age),
+                                         breaks = c(17, 29, 44, 59, Inf), 
+                                         labels = c("18-29", "30-44", "45-59", "60+"), 
+                                         right = FALSE)
+
+# Group by age and calculate the average poverty ratio and income-to-poverty ratio
+age_analysis <- filtered_combined_data %>%
+  group_by(age_group) %>%
+  summarize(avg_poverty_ratio = mean(as.numeric(`SA family poverty ratio (top-coded)`), na.rm = TRUE),
+            avg_income_poverty_ratio = mean(as.numeric(`Ratio of family income to poverty threshold for SA's family`), na.rm = TRUE))
+
+
+# Bar plot for Poverty Ratio by Age Group
+ggplot(age_analysis, aes(x = reorder(age_group, -avg_poverty_ratio), y = avg_poverty_ratio, fill = age_group)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Poverty Ratio by Age Group",
+       x = "Age Group", y = "Average Poverty Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Slant the x-axis titles
+
+# Group by region and calculate the average poverty ratio and income-to-poverty ratio
+region_analysis <- filtered_combined_data %>%
+  group_by(Region) %>%
+  summarize(avg_poverty_ratio = mean(as.numeric(`SA family poverty ratio (top-coded)`), na.rm = TRUE),
+            avg_income_poverty_ratio = mean(as.numeric(`Ratio of family income to poverty threshold for SA's family`), na.rm = TRUE))
+
+
+# Bar plot for Poverty Ratio by Region
+ggplot(region_analysis, aes(x = reorder(Region, -avg_poverty_ratio), y = avg_poverty_ratio, fill = Region)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Poverty Ratio by Region",
+       x = "Region", y = "Average Poverty Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Slant the x-axis titles
+
+# Group by Urban-Rural and calculate the average poverty ratio and income-to-poverty ratio
+urban_rural_analysis <- filtered_combined_data %>%
+  group_by(`Urban-Rural`) %>%
+  summarize(avg_poverty_ratio = mean(as.numeric(`SA family poverty ratio (top-coded)`), na.rm = TRUE),
+            avg_income_poverty_ratio = mean(as.numeric(`Ratio of family income to poverty threshold for SA's family`), na.rm = TRUE))
+
+
+# Bar plot for Poverty Ratio by Urban-Rural
+ggplot(urban_rural_analysis, aes(x = reorder(`Urban-Rural`, -avg_poverty_ratio), y = avg_poverty_ratio, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Poverty Ratio by Urban-Rural Classification",
+       x = "Urban-Rural", y = "Average Poverty Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Slant the x-axis titles
+```
+
+
+```{r}
+medicare_medicaid_trend <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarise(
+    Medicare_Covered = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Covered = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Any_Insurance = sum(`Coverage status` != "No", na.rm = TRUE) # Only count insured individuals
+  ) %>%
+  mutate(
+    Medicare_Perc = Medicare_Covered / Any_Insurance * 100,
+    Medicaid_Perc = Medicaid_Covered / Any_Insurance * 100
+  )
+filtered_combined_data %>%
+  mutate(Dual_Eligible = (`Medicare recode` %in% c("Yes, information", "Yes, but no information")) &
+                         (`Medicaid recode` %in% c("Yes, information", "Yes, but no information"))) %>%
+  summarise(Dual_Enrollment = sum(Dual_Eligible, na.rm = TRUE),
+            Total = n(),
+            Dual_Perc = Dual_Enrollment / Total * 100)
+
+```
+```{r}
+total_by_year <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarise(Total_Count = n())
+
+print(total_by_year)
+
+total_by_year_region <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(Total_Count = n()) %>%
+  arrange(Year, Region)
+
+print(total_by_year_region)
+medicare_medicaid_by_year <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarise(
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  )
+
+print(medicare_medicaid_by_year)
+medicare_medicaid_by_year_region <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  arrange(Year, Region)
+
+print(medicare_medicaid_by_year_region)
+```
+```{r}
+medicare_medicaid_coverage_by_year <- filtered_combined_data %>%
+  group_by(Year) %>%
+  summarise(
+    Total_Count = n(),
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  mutate(
+    Medicare_Percentage = (Medicare_Count / Total_Count) * 100,
+    Medicaid_Percentage = (Medicaid_Count / Total_Count) * 100
+  )
+
+print(medicare_medicaid_coverage_by_year)
+```
+```{r}
+medicare_medicaid_coverage_by_year_region <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(
+    Total_Count = n(),
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  mutate(
+    Medicare_Percentage = (Medicare_Count / Total_Count) * 100,
+    Medicaid_Percentage = (Medicaid_Count / Total_Count) * 100
+  ) %>%
+  arrange(Year, Region)
+
+print(medicare_medicaid_coverage_by_year_region)
+
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+
+ggplot(medicare_medicaid_coverage_by_year, aes(x = Year, y = Medicare_Percentage)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "blue", size = 2) +
+  labs(
+    title = "Medicare Coverage Trend by Year",
+    x = "Year",
+    y = "Medicare Coverage Percentage"
+  ) +
+  theme_minimal()
+ggplot(medicare_medicaid_coverage_by_year, aes(x = Year, y = Medicaid_Percentage)) +
+  geom_line(color = "green", size = 1) +
+  geom_point(color = "green", size = 2) +
+  labs(
+    title = "Medicaid Coverage Trend by Year",
+    x = "Year",
+    y = "Medicaid Coverage Percentage"
+  ) +
+  theme_minimal()
+```
+```{r}
+# Calculate total count, Medicare count, and Medicaid count by year and region
+medicare_medicaid_by_year_region <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(
+    Total_Count = n(),
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  mutate(
+    Medicare_Percentage = (Medicare_Count / Total_Count) * 100,
+    Medicaid_Percentage = (Medicaid_Count / Total_Count) * 100
+  ) %>%
+  pivot_longer(cols = c(Medicare_Percentage, Medicaid_Percentage), names_to = "Coverage_Type", values_to = "Coverage_Percentage")
+
+# View the reshaped data
+print(medicare_medicaid_by_year_region)
+
+```
+
+
+
+```{r}
+# Calculate coverage and scale it to 100%
+medicare_medicaid_scaled <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(
+    Total_Count = n(),
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  mutate(
+    Medicare_Percentage = (Medicare_Count / Total_Count) * 100,
+    Medicaid_Percentage = (Medicaid_Count / Total_Count) * 100
+  ) %>%
+  # Reshape to long format
+  pivot_longer(cols = c(Medicare_Percentage, Medicaid_Percentage), names_to = "Coverage_Type", values_to = "Coverage_Percentage") %>%
+  group_by(Year, Coverage_Type) %>%
+  mutate(
+    Total_Coverage = sum(Coverage_Percentage), # Calculate total coverage for each year and coverage type
+    Scaled_Percentage = Coverage_Percentage / Total_Coverage * 100 # Scale it to 100%
+  ) %>%
+  ungroup()
+```
+```{r}
+library(ggplot2)
+
+# Create the 100% stacked barplot
+ggplot(medicare_medicaid_scaled, aes(x = factor(Year), y = Scaled_Percentage, fill = Region)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ Coverage_Type, scales = "free_y") +  # Separate by Medicare and Medicaid
+  labs(
+    title = "Medicare and Medicaid Coverage by Year and Region (Scaled to 100%)",
+    x = "Year",
+    y = "Coverage Percentage",
+    fill = "Region"
+  ) +
+  scale_fill_manual(values = c("South" = "blue", "West" = "green", "Northeast" = "red", "Midwest" = "purple")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1))
+```
+
+```{r}
+# Prepare the data for trends (Medicare and Medicaid coverage by region)
+medicare_medicaid_trends <- filtered_combined_data %>%
+  group_by(Year, Region) %>%
+  summarise(
+    Total_Count = n(),
+    Medicare_Count = sum(`Medicare recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE),
+    Medicaid_Count = sum(`Medicaid recode` %in% c("Yes, information", "Yes, but no information"), na.rm = TRUE)
+  ) %>%
+  mutate(
+    Medicare_Percentage = (Medicare_Count / Total_Count) * 100,
+    Medicaid_Percentage = (Medicaid_Count / Total_Count) * 100
+  ) %>%
+  pivot_longer(cols = c(Medicare_Percentage, Medicaid_Percentage), names_to = "Coverage_Type", values_to = "Coverage_Percentage")
+
+# View the prepared data
+print(medicare_medicaid_trends)
+
+```
+```{r}
+library(ggplot2)
+
+# Create the line trend plot
+ggplot(medicare_medicaid_trends, aes(x = Year, y = Coverage_Percentage, color = Region, group = interaction(Region, Coverage_Type))) +
+  geom_line(size = 1.2) +  # Plot the line
+  geom_point(size = 3) +  # Add points for better visibility
+  facet_wrap(~ Coverage_Type, scales = "free_y") +  # Separate trends for Medicare and Medicaid
+  labs(
+    title = "Trends of Medicare and Medicaid Coverage by Region",
+    x = "Year",
+    y = "Coverage Percentage",
+    color = "Region"
+  ) +
+  scale_color_manual(values = c("South" = "blue", "West" = "green", "Northeast" = "red", "Midwest" = "purple")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r}
+names(filtered_combined_data)
+```
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Filter the dataset for Medicare and Medicaid people, and focus on Excellent to Poor in General Health Status
+filtered_data_health <- filtered_combined_data %>%
+  filter((`Medicare recode` %in% c("Yes, information", "Yes, but no information") | 
+          `Medicaid recode` %in% c("Yes, information", "Yes, but no information")) &
+         `General health status` %in% c("Excellent", "Very Good", "Good", "Fair", "Poor"))
+
+# Create a stacked bar plot for Medicare coverage, split by year and General Health Status
+ggplot(filtered_data_health %>% filter(`Medicare recode` %in% c("Yes, information", "Yes, but no information")), 
+       aes(x = Year, fill = `General health status`)) +
+  geom_bar(position = "fill", stat = "count") +
+  labs(title = "General Health Status for Medicare by Year", 
+       x = "Year", 
+       y = "Proportion of General Health Status") +
+  scale_fill_manual(values = c("Excellent" = "green", 
+                               "Very Good" = "lightgreen", 
+                               "Good" = "yellow", 
+                               "Fair" = "orange", 
+                               "Poor" = "red")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+
+# Create a stacked bar plot for Medicaid coverage, split by year and General Health Status
+ggplot(filtered_data_health %>% filter(`Medicaid recode` %in% c("Yes, information", "Yes, but no information")), 
+       aes(x = Year, fill = `General health status`)) +
+  geom_bar(position = "fill", stat = "count") +
+  labs(title = "General Health Status for Medicaid by Year", 
+       x = "Year", 
+       y = "Proportion of General Health Status") +
+  scale_fill_manual(values = c("Excellent" = "green", 
+                               "Very Good" = "lightgreen", 
+                               "Good" = "yellow", 
+                               "Fair" = "orange", 
+                               "Poor" = "red")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Create coverage status (assuming Medicare and Medicaid columns in the dataset)
+filtered_combined_data <- filtered_combined_data %>%
+  mutate(Coverage_Status = case_when(
+    `Medicare recode` %in% c("Yes, information", "Yes, but no information") ~ "Medicare",
+    `Medicaid recode` %in% c("Yes, information", "Yes, but no information") ~ "Medicaid",
+    TRUE ~ "Others"
+  ))
+
+# Function to create a summary for each health-related question
+create_summary_plot <- function(column_name, label) {
+  # Summary of responses by coverage status
+  summary_data <- filtered_combined_data %>%
+    filter(!is.na(!!sym(column_name))) %>%
+    group_by(Coverage_Status, !!sym(column_name)) %>%
+    tally() %>%
+    ungroup() %>%
+    group_by(Coverage_Status) %>%
+    mutate(total = sum(n),
+           percentage = n / total * 100) %>%
+    ungroup()
+  
+  # Plot the stacked bar chart with reversed legend order
+  ggplot(summary_data, aes(x = Coverage_Status, y = percentage, fill = as.factor(!!sym(column_name)))) +
+    geom_bar(stat = "identity", position = "stack") +
+    labs(title = paste(label, "by Coverage Status"),
+         x = "Coverage Status", 
+         y = "Percentage",
+         fill = label) +  # Ensure a proper label for the legend
+    scale_fill_brewer(palette = "Set3", guide = guide_legend(reverse = TRUE)) +  # Reverse legend order
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+}
+
+# Create plots for specific columns of interest (using English column names)
+create_summary_plot("Time since last saw doctor", "Time Since Last Saw Doctor")
+create_summary_plot("Number of times visited urgent care, past 12m, top-coded", "Number of ER Visits in the Past 12 Months")
+create_summary_plot("Ever been told you had hypertension", "Ever Been Told You Had Hypertension")
+create_summary_plot("Ever told you had high cholesterol", "Ever Told You Had High Cholesterol")
+create_summary_plot("Ever been told you had COPD, emphysema, or chronic bronchitis", "Ever Been Told You Had COPD, Emphysema, or Chronic Bronchitis")
+create_summary_plot("Difficulty walking/steps", "Difficulty Walking/Steps")
+create_summary_plot("Difficulty seeing", "Difficulty Seeing")
+create_summary_plot("Difficulty remembering/concentrating", "Difficulty Remembering/Concentrating")
+create_summary_plot("Problems paying medical bills, past 12m", "Problems Paying Medical Bills")
+create_summary_plot("Delayed medical care due to cost, past 12m", "Delayed Medical Care Due to Cost")
+create_summary_plot("Needed medical care but did not get it due to cost, past 12m", "Needed Medical Care But Did Not Get It Due to Cost")
+create_summary_plot("Receive food stamps, past 12m", "Receive Food Stamps")
+create_summary_plot("Receive WIC benefits, past 12m", "Receive WIC Benefits")
+
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+
+# Function to create trend line plot with improved color palette
+create_trend_plot <- function(column_name, label) {
+  # Prepare the data: Calculate the percentage of responses for each year
+  trend_data <- filtered_combined_data %>%
+    filter(!is.na(!!sym(column_name))) %>%
+    group_by(Year, !!sym(column_name)) %>%
+    tally() %>%
+    ungroup() %>%
+    group_by(Year) %>%
+    mutate(total = sum(n),
+           percentage = n / total * 100) %>%
+    ungroup()
+  
+  # Create the trend plot with line and dot
+  ggplot(trend_data, aes(x = Year, y = percentage, color = as.factor(!!sym(column_name)))) +
+    geom_line() + 
+    geom_point(size = 2) +
+    labs(title = paste(label, "Trend Over the Years"),
+         x = "Year", 
+         y = "Percentage",
+         color = label) +
+    scale_color_brewer(palette = "Set1") +  # Improved color palette
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+}
+
+# Create trend plots for each health-related question using English sentences
+create_trend_plot("Time since last saw doctor", "Time Since Last Saw Doctor")
+create_trend_plot("Number of times visited urgent care, past 12m, top-coded", "Number of ER Visits in the Past 12 Months")
+create_trend_plot("Ever been told you had hypertension", "Hypertension")
+create_trend_plot("Ever told you had high cholesterol", "High Cholesterol")
+create_trend_plot("Ever been told you had COPD, emphysema, or chronic bronchitis", "COPD, Emphysema, or Chronic Bronchitis")
+create_trend_plot("Difficulty walking/steps", "Difficulty Walking/Steps")
+create_trend_plot("Difficulty seeing", "Difficulty Seeing")
+create_trend_plot("Difficulty remembering/concentrating", "Difficulty Remembering/Concentrating")
+create_trend_plot("Problems paying medical bills, past 12m", "Problems Paying Medical Bills")
+create_trend_plot("Delayed medical care due to cost, past 12m", "Delayed Medical Care Due to Cost")
+create_trend_plot("Needed medical care but did not get it due to cost, past 12m", "Needed Medical Care But Did Not Get It")
+create_trend_plot("Receive food stamps, past 12m", "Receive Food Stamps")
+create_trend_plot("Receive WIC benefits, past 12m", "Receive WIC Benefits")
+
+```
+
+
+
+
+
+
+
+

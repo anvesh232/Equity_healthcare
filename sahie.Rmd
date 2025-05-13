@@ -1,0 +1,343 @@
+```{r}
+library(dplyr)
+library(readr)
+file_path <- "/Users/Staff/Desktop/equity in health services/sahie/"
+years <- 2012:2022
+
+columns_to_keep <- c("year", "geocat","agecat", "racecat", "sexcat", "iprcat", "NIPR", "NUI", "NIC","PCTUI", "PCTIC", "PCTELIG", "PCTLIIC", "state_name", "county_name")
+
+process_file <- function(year) {
+  file <- paste0(file_path, year, ".csv")  
+  data <- read_csv(file) %>%
+    select(all_of(columns_to_keep)) 
+  
+  data <- data %>%
+    mutate(across(c("NIPR", "NUI", "NIC", "PCTUI", "PCTIC", "PCTELIG", "PCTLIIC"),
+                  ~as.numeric(gsub("[^0-9.]", "", .))))  # Remove non-numeric characters
+  
+  return(data)
+}
+insurance <- bind_rows(lapply(years, process_file))
+```
+
+```{r}
+names(insurance)
+```
+
+```{r}
+# Filter the dataset for state-level data (geocat = 40)
+state_data <- subset(insurance, geocat == 40)
+```
+
+```{r}
+# Load dplyr for summarization
+library(dplyr)
+
+# Filter, group, and summarize in a single pipeline
+state_year_summary <- insurance %>%
+  filter(geocat == 40, agecat == 0, racecat == 0, sexcat == 0, iprcat == 0) %>%
+  group_by(state_name, year) %>%
+  summarise(
+    Total_Population = sum(NIPR, na.rm = TRUE),
+    Total_Uninsured = sum(NUI, na.rm = TRUE),
+    Total_Insured = sum(NIC, na.rm = TRUE),
+    Percent_Uninsured = mean(PCTUI, na.rm = TRUE),
+    Percent_Insured = mean(PCTIC, na.rm = TRUE)
+  )
+
+# View the summarized table
+state_year_summary
+
+```
+```{r}
+# Create a mapping for age categories
+agecat_labels <- c(
+  "0" = "Under 65 years",
+  "1" = "18 to 64 years",
+  "2" = "40 to 64 years",
+  "3" = "50 to 64 years",
+  "4" = "Under 19 years",
+  "5" = "21 to 64 years"
+)
+
+# Create a mapping for race categories
+racecat_labels <- c(
+  "0" = "All races",
+  "1" = "White alone",
+  "2" = "Black alone",
+  "3" = "Hispanic (any race)"
+)
+
+# Create a mapping for sex categories
+sexcat_labels <- c(
+  "0" = "Both sexes",
+  "1" = "Male",
+  "2" = "Female"
+)
+
+# Create a mapping for income categories
+iprcat_labels <- c(
+  "0" = "All income levels",
+  "1" = "At or below 200% of poverty",
+  "2" = "At or below 250% of poverty",
+  "3" = "At or below 138% of poverty",
+  "4" = "At or below 400% of poverty",
+  "5" = "Between 138% - 400% of poverty"
+)
+
+```
+
+```{r}
+state_summary <- state_data %>%
+  group_by(state_name, year, agecat, racecat, sexcat, iprcat) %>%
+  summarise(
+    Total_Population = sum(NIPR, na.rm = TRUE),
+    Total_Uninsured = sum(NUI, na.rm = TRUE),
+    Total_Insured = sum(NIC, na.rm = TRUE),
+    Percent_Uninsured = mean(PCTUI, na.rm = TRUE),
+    Percent_Insured = mean(PCTIC, na.rm = TRUE)
+  ) %>%
+  mutate(
+    # Replace codes with labels for each category
+    agecat = recode(agecat, !!!agecat_labels),
+    racecat = recode(racecat, !!!racecat_labels),
+    sexcat = recode(sexcat, !!!sexcat_labels),
+    iprcat = recode(iprcat, !!!iprcat_labels)
+  )
+
+# View the summarized table with labels instead of codes
+state_summary
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)  # For percentage formatting
+
+# Process data for insured and uninsured rates over time
+insurance_trend <- insurance %>%
+  filter(geocat == 40, agecat == 0, racecat == 0, sexcat == 0, iprcat == 0) %>%
+  group_by(year) %>%
+  summarise(
+    Percent_Uninsured = mean(PCTUI, na.rm = TRUE),  # Use mean to avoid incorrect summation
+    Percent_Insured = mean(PCTIC, na.rm = TRUE)    
+  ) %>%
+  pivot_longer(cols = c(Percent_Uninsured, Percent_Insured), 
+               names_to = "Coverage_Type", 
+               values_to = "Percentage")
+
+# Plot insured and uninsured trends over time
+ggplot(insurance_trend, aes(x = year, y = Percentage, color = Coverage_Type)) +
+  geom_line(size = 1) +  # Trend line
+  geom_point(size = 3) +  # Add dots for each year
+  scale_y_continuous(labels = percent_format(scale = 1)) +  # Convert to percentage format
+  labs(
+    title = "Uninsured and Insured Rates Over Time (2008–2022) for Total Population",
+    x = "Year",
+    y = "Percentage",
+    color = "Coverage Type"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(scales)  # For percentage formatting
+
+# Process data for insured and uninsured rates by sex over time
+insurance_sex_trend <- insurance %>%
+  filter(geocat == 40, agecat == 0, racecat == 0, sexcat %in% c(1, 2), iprcat == 0) %>%
+  group_by(year, sexcat) %>%
+  summarise(
+    Percent_Uninsured = mean(PCTUI, na.rm = TRUE),  # Use mean to avoid incorrect summation
+    Percent_Insured = mean(PCTIC, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(cols = c(Percent_Uninsured, Percent_Insured), 
+               names_to = "Coverage_Type", 
+               values_to = "Percentage")
+
+# Plot insured and uninsured trends over time by sex
+ggplot(insurance_sex_trend, aes(x = year, y = Percentage, color = factor(sexcat), linetype = Coverage_Type)) +
+  geom_line(size = 1) +  # Trend line
+  geom_point(size = 3) +  # Add dots for each year
+  scale_y_continuous(labels = percent_format(scale = 1)) +  # Convert y-axis to percentage format
+  scale_color_manual(values = c("blue", "pink"), labels = c("Male", "Female")) +  # Custom colors
+  labs(
+    title = "Uninsured and Insured Rates Over Time (2008–2022): Male vs Female",
+    x = "Year",
+    y = "Percentage",
+    color = "Sex",
+    linetype = "Coverage Type"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+library(scales)  # For percentage formatting
+library(tidyr)   # For pivot_longer()
+
+# Process data for insured and uninsured rates by race over time
+insurance_race_trend <- insurance %>%
+  filter(geocat == 40, agecat == 0, racecat %in% c(1, 2, 3), sexcat == 0, iprcat == 0) %>%
+  group_by(year, racecat) %>%
+  summarise(
+    Percent_Uninsured = mean(PCTUI, na.rm = TRUE),  # Use mean for correct calculation
+    Percent_Insured = mean(PCTIC, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(cols = c(Percent_Uninsured, Percent_Insured), 
+               names_to = "Coverage_Type", 
+               values_to = "Percentage")
+
+# Plot insured and uninsured trends over time by race
+ggplot(insurance_race_trend, aes(x = year, y = Percentage, color = factor(racecat), linetype = Coverage_Type)) +
+  geom_line(size = 1) +  # Trend line
+  geom_point(size = 3) +  # Add dots for each year
+  scale_y_continuous(labels = percent_format(scale = 1)) +  # Convert y-axis to percentage format
+  scale_color_manual(values = c("red", "green", "blue"), labels = c("White", "Black", "Hispanic")) +  
+  labs(
+    title = "Uninsured and Insured Rates Over Time (2008–2022): Race Comparison",
+    x = "Year",
+    y = "Percentage",
+    color = "Race",
+    linetype = "Coverage Type"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Plot trends for Income Levels without creating extra dataframes
+insurance %>%
+  filter(geocat == 40, agecat == 0, racecat == 0, sexcat == 0, iprcat %in% c(1, 2, 3, 4, 5)) %>%
+  group_by(year, iprcat) %>%
+  summarise(
+    Total_Uninsured = sum(NUI, na.rm = TRUE),
+    Total_Insured = sum(NIC, na.rm = TRUE),
+    Percent_Uninsured = sum(PCTUI, na.rm = TRUE),
+    Percent_Insured = sum(PCTIC, na.rm = TRUE)
+  ) %>%
+  ggplot(aes(x = year, color = factor(iprcat))) +
+  geom_line(aes(y = Percent_Uninsured), size = 1) +
+  geom_line(aes(y = Percent_Insured), size = 1) +
+  scale_color_manual(values = c("orange", "purple", "cyan", "brown", "green"), 
+                     labels = c("<=200%", "<=250%", "<=138%", "<=400%", "138%-400%")) +
+  labs(
+    title = "Uninsured and Insured Rates Over Time (2008–2022): Income Levels",
+    x = "Year",
+    y = "Percentage",
+    color = "Income Level"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+```{r}
+insurance %>%
+  filter(geocat == 40, agecat == 0, racecat %in% c(1, 2, 3), sexcat == 0, iprcat %in% c(1, 2, 3, 4, 5), year %in% c(2012, 2016, 2022)) %>%
+  ggplot(aes(x = factor(year), y = PCTIC, fill = factor(iprcat))) +  # Changed PCTUI to PCTIC
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ racecat, labeller = labeller(racecat = c("1" = "White", "2" = "Black", "3" = "Hispanic"))) +
+  scale_fill_manual(values = c("orange", "purple", "cyan", "brown", "green"),
+                    labels = c("<=200%", "<=250%", "<=138%", "<=400%", "138%-400%")) +
+  labs(
+    title = "Insured Rates by Race, Income, and Year",  # Updated the title
+    x = "Year",
+    y = "Insured Percentage",  # Updated the y-axis label
+    fill = "Income Level"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+
+
+```{r}
+insurance %>%
+  filter(geocat == 40, agecat == 0, racecat %in% c(1, 2, 3), sexcat == 0, iprcat %in% c(1, 2, 3, 4, 5), year %in% c(2012, 2016,2022)) %>%
+  ggplot(aes(x = factor(year), y = PCTUI, fill = factor(iprcat))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ racecat, labeller = labeller(racecat = c("1" = "White", "2" = "Black", "3" = "Hispanic"))) +
+  scale_fill_manual(values = c("orange", "purple", "cyan", "brown", "green"),
+                     labels = c("<=200%", "<=250%", "<=138%", "<=400%", "138%-400%")) +
+  labs(
+    title = "Uninsured Rates by Race, Income, and Year",
+    x = "Year",
+    y = "Uninsured Percentage",
+    fill = "Income Level"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+ggplot(insurance %>%
+         filter(geocat == 40, agecat == 0, racecat %in% c(1, 2, 3), sexcat == 0, iprcat %in% c(1, 2, 3, 4, 5)) %>%
+         group_by(year, racecat) %>%
+         summarise(
+           Percent_Insured = mean(PCTIC, na.rm = TRUE),  # Correct percentage calculation
+           .groups = "drop"
+         ), aes(x = factor(year), y = Percent_Insured, fill = factor(racecat))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ racecat, labeller = as_labeller(c("1" = "White", "2" = "Black", "3" = "Hispanic"))) + 
+  scale_fill_manual(values = c("red", "green", "blue")) +
+  scale_y_continuous(labels = percent_format(scale = 1)) +  # Correct percentage format
+  labs(
+    title = "Insured Rates Over Time (2008–2022) by Race",
+    x = "Year",
+    y = "Percentage Insured",
+    fill = "Race"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top", axis.text.x = element_text(angle = 45, hjust = 1))
+ggplot(insurance %>%
+         filter(geocat == 40, agecat == 0, racecat %in% c(1, 2, 3), sexcat == 0, iprcat %in% c(1, 2, 3, 4, 5)) %>%
+         group_by(year, racecat) %>%
+         summarise(
+           Percent_Uninsured = mean(PCTUI, na.rm = TRUE),  # Correct percentage calculation
+           .groups = "drop"
+         ), aes(x = factor(year), y = Percent_Uninsured, fill = factor(racecat))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ racecat, labeller = as_labeller(c("1" = "White", "2" = "Black", "3" = "Hispanic"))) + 
+  scale_fill_manual(values = c("red", "green", "blue")) +
+  scale_y_continuous(labels = percent_format(scale = 1)) +  # Correct percentage format
+  labs(
+    title = "Uninsured Rates Over Time (2008–2022) by Race",
+    x = "Year",
+    y = "Percentage Uninsured",
+    fill = "Race"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top", axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+
+
+
+
+

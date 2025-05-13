@@ -1,0 +1,1228 @@
+```{r}
+library(readxl)
+regions <- read_excel("/Users/Staff/Desktop/equity in health services/regions.xlsx")
+colnames(regions)[colnames(regions) == "NCHS scheme"] <- "Urban-Rural"
+library(dplyr)
+# Recode the Urban-Rural column
+regions <- regions %>%
+  mutate(`Urban-Rural` = case_when(
+    `Urban-Rural` == "Large central metro" ~ "Large central metro",
+    `Urban-Rural` == "Large fringe metro" ~ "Large fringe metro",
+    `Urban-Rural` %in% c("Medium metro", "Small metro") ~ "Medium and small metro",
+    `Urban-Rural` == "Noncore" ~ "Nonmetropolitan",
+    TRUE ~ NA_character_ # Handle NA values
+  ))
+
+state_to_region <- c(
+  "ME" = "Northeast", "NH" = "Northeast", "VT" = "Northeast", "MA" = "Northeast", "RI" = "Northeast", "CT" = "Northeast", "NY" = "Northeast", "NJ" = "Northeast", "PA" = "Northeast",
+  "OH" = "Midwest", "IN" = "Midwest", "IL" = "Midwest", "IA" = "Midwest", "MI" = "Midwest", "MN" = "Midwest", "WI" = "Midwest", "MO" = "Midwest", "ND" = "Midwest", "SD" = "Midwest", "NE" = "Midwest", "KS" = "Midwest",
+  "DE" = "South", "MD" = "South", "DC" = "South", "VA" = "South", "WV" = "South", "NC" = "South", "SC" = "South", "GA" = "South", "FL" = "South", "KY" = "South", "TN" = "South", "AL" = "South", "MS" = "South", "AR" = "South", "LA" = "South", "OK" = "South", "TX" = "South",
+  "MT" = "West", "WY" = "West", "CO" = "West", "NM" = "West", "AZ" = "West", "UT" = "West", "NV" = "West", "ID" = "West", "WA" = "West", "OR" = "West", "CA" = "West", "AK" = "West", "HI" = "West"
+)
+# Add the Regions column based on State abbreviation
+regions <- regions %>%
+  mutate(Region = state_to_region[State])
+abbreviation_to_full <- c(
+  "ME" = "Maine", "NH" = "New Hampshire", "VT" = "Vermont", "MA" = "Massachusetts", "RI" = "Rhode Island", 
+  "CT" = "Connecticut", "NY" = "New York", "NJ" = "New Jersey", "PA" = "Pennsylvania", 
+  "OH" = "Ohio", "IN" = "Indiana", "IL" = "Illinois", "IA" = "Iowa", "MI" = "Michigan", "MN" = "Minnesota", 
+  "WI" = "Wisconsin", "MO" = "Missouri", "ND" = "North Dakota", "SD" = "South Dakota", "NE" = "Nebraska", 
+  "KS" = "Kansas", "DE" = "Delaware", "MD" = "Maryland", "DC" = "District of Columbia", "VA" = "Virginia", 
+  "WV" = "West Virginia", "NC" = "North Carolina", "SC" = "South Carolina", "GA" = "Georgia", "FL" = "Florida", 
+  "KY" = "Kentucky", "TN" = "Tennessee", "AL" = "Alabama", "MS" = "Mississippi", "AR" = "Arkansas", 
+  "LA" = "Louisiana", "OK" = "Oklahoma", "TX" = "Texas", "MT" = "Montana", "WY" = "Wyoming", 
+  "CO" = "Colorado", "NM" = "New Mexico", "AZ" = "Arizona", "UT" = "Utah", "NV" = "Nevada", "ID" = "Idaho", 
+  "WA" = "Washington", "OR" = "Oregon", "CA" = "California", "AK" = "Alaska", "HI" = "Hawaii"
+)
+
+# Replace state abbreviations with full state names in the 'State' column in the regions dataframe
+regions <- regions %>%
+  mutate(State = abbreviation_to_full[State])
+```
+
+
+
+```{r}
+library(readr)
+library(readxl)
+library(dplyr)
+# Load and preprocess data
+nanda_selected <- read_csv("/Users/Staff/Desktop/equity in health services/nanda_healthcare_1990-2021_CSVs/nanda_healthcare_Tract20_1990-2021_01P.csv") %>%
+  mutate(tract_fips20 = as.character(tract_fips20),
+         # Remove leading zero if the code has 11 digits
+         tract_fips20 = ifelse(nchar(tract_fips20) == 11 & substr(tract_fips20, 1, 1) == "0", 
+                               substr(tract_fips20, 2, nchar(tract_fips20)), 
+                               tract_fips20)) %>%
+  # Merge with codes directly without storing codes separately
+  left_join(
+    read_excel("/Users/Staff/Desktop/equity in health services/nanda_healthcare_1990-2021_CSVs/EC_AllTracts_V2.xlsx", sheet = "EC_AllTracts_V2", skip = 1) %>%
+      rename(tract_fips20 = `2020 Census Tract Number FIPS code`) %>%
+      mutate(tract_fips20 = as.character(tract_fips20)), 
+    by = "tract_fips20"
+  ) %>%
+  # Select relevant columns only
+  select(
+    tract_fips20, `State Name`, `County or County-Equivalent Entity Name`, year, 
+    totpop, aland20, 
+    count_allphysicians, den_allphysicians, aden_allphysicians, 
+    count_physicalhealthphys, den_physicalhealthphys, 
+    count_mentalhealthphys, den_mentalhealthphys, 
+    count_mentalhealthpractitioners, den_mentalhealthpractitioners, 
+    count_mentalhealthclinics, den_mentalhealthclinics, 
+    count_outpatientclinics, den_outpatientclinics, 
+    count_physicaltherapyclincs, den_physicaltherapyclincs, 
+    count_altmedicinepractitioners, den_altmedicinepractitioners, 
+    count_pharmacies, den_pharmacies, 
+    count_medequipment, den_medequipment, 
+    count_allrescarefacilities, den_allrescarefacilities, 
+    count_resnursingfacilities, den_resnursingfacilities, 
+    count_homehealth, den_homehealth
+  )
+```
+
+```{r}
+library(dplyr)
+
+state_to_region <- c(
+  "Maine" = "Northeast", "New Hampshire" = "Northeast", "Vermont" = "Northeast", "Massachusetts" = "Northeast", "Rhode Island" = "Northeast", 
+  "Connecticut" = "Northeast", "New York" = "Northeast", "New Jersey" = "Northeast", "Pennsylvania" = "Northeast",
+  "Ohio" = "Midwest", "Indiana" = "Midwest", "Illinois" = "Midwest", "Iowa" = "Midwest", "Michigan" = "Midwest", 
+  "Minnesota" = "Midwest", "Wisconsin" = "Midwest", "Missouri" = "Midwest", "North Dakota" = "Midwest", 
+  "South Dakota" = "Midwest", "Nebraska" = "Midwest", "Kansas" = "Midwest",
+  "Delaware" = "South", "Maryland" = "South", "District of Columbia" = "South", "Virginia" = "South", 
+  "West Virginia" = "South", "North Carolina" = "South", "South Carolina" = "South", "Georgia" = "South", 
+  "Florida" = "South", "Kentucky" = "South", "Tennessee" = "South", "Alabama" = "South", "Mississippi" = "South", 
+  "Arkansas" = "South", "Louisiana" = "South", "Oklahoma" = "South", "Texas" = "South",
+  "Montana" = "West", "Wyoming" = "West", "Colorado" = "West", "New Mexico" = "West", "Arizona" = "West", 
+  "Utah" = "West", "Nevada" = "West", "Idaho" = "West", "Washington" = "West", "Oregon" = "West", 
+  "California" = "West", "Alaska" = "West", "Hawaii" = "West"
+)
+
+# Add the Region column based on the State Name in nanda_selected
+nanda_selected$Region <- state_to_region[nanda_selected$`State Name`]
+
+# Step 2: Join nanda_selected with regions based on both State Name and County for Urban-Rural
+nanda_selected <- nanda_selected %>%
+  left_join(regions %>%
+              select(State, County, `Urban-Rural`),  # We need State, County, and Urban-Rural columns
+            by = c("State Name" = "State", "County or County-Equivalent Entity Name" = "County"))
+```
+
+
+
+
+```{r}
+library(dplyr)
+library(readr)
+file_path <- "/Users/Staff/Desktop/equity in health services/sahie/"
+years <- 2012:2022
+
+columns_to_keep <- c("year", "geocat","agecat", "racecat", "sexcat", "iprcat", "NIPR", "NUI", "NIC","PCTUI", "PCTIC", "PCTELIG", "PCTLIIC", "state_name", "county_name")
+
+process_file <- function(year) {
+  file <- paste0(file_path, year, ".csv")  
+  data <- read_csv(file) %>%
+    select(all_of(columns_to_keep)) 
+  
+  data <- data %>%
+    mutate(across(c("NIPR", "NUI", "NIC", "PCTUI", "PCTIC", "PCTELIG", "PCTLIIC"),
+                  ~as.numeric(gsub("[^0-9.]", "", .))))  # Remove non-numeric characters
+  
+  return(data)
+}
+insurance <- bind_rows(lapply(years, process_file))
+```
+
+```{r}
+# Define the state to region mapping based on full state names
+
+
+# Add the Region column based on the State Name in insurance dataset
+insurance$Region <- state_to_region[insurance$state_name]
+
+# Now, match Urban-Rural data from regions dataframe (using state_name and county_name)
+insurance <- insurance %>%
+  left_join(regions %>%
+              select(State, County, `Urban-Rural`),  # Select only relevant columns from regions
+            by = c("state_name" = "State", "county_name" = "County"))  # Match based on both state and county
+
+```
+
+```{r}
+# Create a mapping for age categories
+agecat_labels <- c(
+  "0" = "Under 65 years",
+  "1" = "18 to 64 years",
+  "2" = "40 to 64 years",
+  "3" = "50 to 64 years",
+  "4" = "Under 19 years",
+  "5" = "21 to 64 years"
+)
+
+# Create a mapping for race categories
+racecat_labels <- c(
+  "0" = "All races",
+  "1" = "White alone",
+  "2" = "Black alone",
+  "3" = "Hispanic (any race)"
+)
+
+# Create a mapping for sex categories
+sexcat_labels <- c(
+  "0" = "Both sexes",
+  "1" = "Male",
+  "2" = "Female"
+)
+
+# Create a mapping for income categories
+iprcat_labels <- c(
+  "0" = "All income levels",
+  "1" = "At or below 200% of poverty",
+  "2" = "At or below 250% of poverty",
+  "3" = "At or below 138% of poverty",
+  "4" = "At or below 400% of poverty",
+  "5" = "Between 138% - 400% of poverty"
+)
+
+```
+
+
+
+```{r}
+AHRF18_22 <- read_csv("/Users/Staff/Desktop/equity in health services/ahrf/dashboard data/AHRF_Demographics_Dashboard_Download_2018-2022.csv")
+
+AHRF18_22$Region <- state_to_region[AHRF18_22$`Geography Name`]
+```
+
+
+```{r}
+library(readr)
+acs <- read_csv("~/Desktop/equity in health services/ACS/combined_acs_data.csv")
+# Define the state to region mapping based on full state names
+
+# Add the Region column based on the State Name in insurance dataset
+acs$Region <- state_to_region[acs$state]
+```
+
+
+```{r}
+library(readr)
+adult19 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2019/adult19.csv")
+adult20 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2020/adult20.csv")
+adult21 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2021/adult21.csv")
+adult22 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2022/adult22.csv")
+adult23 <- read_csv("/Users/Staff/Desktop/equity in health services/nhis/2023/adult23.csv")
+```
+
+
+```{r}
+selected_columns <- c(
+  # Urban vs. Rural Focus
+  "URBRRL", "REGION",
+  
+  # Demographics and Socioeconomic Factors
+  "AGEP_A", "SEX_A", 
+  "HISP_A", "RACEALLP_A", "HISPALLP_A", 
+  "EDUC_A", "MAXEDUC_A", 
+  "FAMINCTC_A", "POVRATTC_A", "RATCAT_A", 
+  "EMPWRKFT_A", "EMPWRKHRS2_A",
+  
+  # Healthcare Access and Utilization
+  "HICOV_A", "NOTCOV_A", "PRIVATE_A", "MEDICARE_A", "MEDICAID_A", 
+  "USUALPL_A", "USPLKIND_A", 
+  "LASTDR_A", "URGNT12MTC_A", "EMERG12MTC_A",
+  
+  # Health Outcomes and Limitations
+  "PHSTAT_A", 
+  "HYPEV_A", "CHLEV_A", "DIABETIC_A", "COPDEV_A", 
+  "DIFF_A", "VISIONDF_A", "COGMEMDFF_A",
+  
+  # Economic Barriers
+  "PAYBLL12M_A", "MEDDL12M_A", "MEDNG12M_A", 
+  "FSNAP12M_A", "FWIC12M_A"
+)
+```
+
+```{r}
+library(dplyr)
+common_columns <- Reduce(intersect, list(
+  colnames(adult19), 
+  colnames(adult20), 
+  colnames(adult21), 
+  colnames(adult22), 
+  colnames(adult23)
+))
+adult19_selected <- adult19 %>% select(all_of(common_columns)) %>% mutate(year = 2019)
+adult20_selected <- adult20 %>% select(all_of(common_columns)) %>% mutate(year = 2020)
+adult21_selected <- adult21 %>% select(all_of(common_columns)) %>% mutate(year = 2021)
+adult22_selected <- adult22 %>% select(all_of(common_columns)) %>% mutate(year = 2022)
+adult23_selected <- adult23 %>% select(all_of(common_columns)) %>% mutate(year = 2023)
+
+combined_adult_data <- bind_rows(
+  adult19_selected,
+  adult20_selected,
+  adult21_selected,
+  adult22_selected,
+  adult23_selected
+)
+
+filtered_combined_data <- combined_adult_data %>% 
+  select(any_of(c(selected_columns, "year")))
+rm(adult19, adult20, adult21, adult22, adult23)
+rm(adult19_selected, adult20_selected, adult21_selected, adult22_selected, adult23_selected)
+rm(combined_adult_data)
+```
+
+```{r}
+library(dplyr)
+library(forcats)
+
+# Define mapping lists for each coded column
+decode_mappings <- list(
+  URBRRL = c("1" = "Large central metro", "2" = "Large fringe metro", 
+             "3" = "Medium and small metro", "4" = "Nonmetropolitan"),
+  REGION = c("1" = "Northeast", "2" = "Midwest", "3" = "South", "4" = "West"),
+  SEX_A = c("1" = "Male", "2" = "Female", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HISP_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  RACEALLP_A = c("1" = "White only", "2" = "Black/African American only", "3" = "Asian only", 
+                 "4" = "AIAN only and any other group", "6" = "Other single and multiple races", 
+                 "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HISPALLP_A = c("01" = "Hispanic", "02" = "NH White only", "03" = "NH Black/African American only", 
+                 "04" = "NH Asian only", "05" = "NH AIAN only", "06" = "NH AIAN and any other group",
+                 "07" = "Other single and multiple races", "97" = "Refused", "98" = "Not Ascertained", "99" = "Don't Know"),
+  HICOV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  NOTCOV_A = c("1" = "Not covered", "2" = "Covered", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PRIVATE_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDICARE_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                 "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDICAID_A = c("1" = "Yes, information", "2" = "Yes, but no information", "3" = "No", "7" = "Refused", 
+                 "8" = "Not Ascertained", "9" = "Don't Know"),
+  USUALPL_A = c("1" = "Yes", "2" = "There is NO place", "3" = "There is MORE THAN ONE place", 
+                "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  USPLKIND_A = c("1" = "Doctor's office or health center", "2" = "Urgent care center", 
+                 "3" = "Hospital emergency room", "4" = "VA Medical Center", "5" = "Some other place",
+                 "6" = "Does not go to one place most often", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PHSTAT_A = c("1" = "Excellent", "2" = "Very Good", "3" = "Good", "4" = "Fair", "5" = "Poor", 
+               "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  HYPEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  CHLEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  COPDEV_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  DIFF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+             "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  VISIONDF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+                 "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  COGMEMDFF_A = c("1" = "No difficulty", "2" = "Some difficulty", "3" = "A lot of difficulty", "4" = "Cannot do at all", 
+                  "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  PAYBLL12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDDL12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  MEDNG12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  FSNAP12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know"),
+  FWIC12M_A = c("1" = "Yes", "2" = "No", "7" = "Refused", "8" = "Not Ascertained", "9" = "Don't Know")
+)
+
+# Manually apply the decode mappings to each column
+filtered_combined_data <- filtered_combined_data %>%
+  mutate(
+    URBRRL = recode(URBRRL, !!!decode_mappings$URBRRL),
+    REGION = recode(REGION, !!!decode_mappings$REGION),
+    SEX_A = recode(SEX_A, !!!decode_mappings$SEX_A),
+    HISP_A = recode(HISP_A, !!!decode_mappings$HISP_A),
+    RACEALLP_A = recode(RACEALLP_A, !!!decode_mappings$RACEALLP_A),
+    HISPALLP_A = recode(HISPALLP_A, !!!decode_mappings$HISPALLP_A),
+    HICOV_A = recode(HICOV_A, !!!decode_mappings$HICOV_A),
+    NOTCOV_A = recode(NOTCOV_A, !!!decode_mappings$NOTCOV_A),
+    PRIVATE_A = recode(PRIVATE_A, !!!decode_mappings$PRIVATE_A),
+    MEDICARE_A = recode(MEDICARE_A, !!!decode_mappings$MEDICARE_A),
+    MEDICAID_A = recode(MEDICAID_A, !!!decode_mappings$MEDICAID_A),
+    USUALPL_A = recode(USUALPL_A, !!!decode_mappings$USUALPL_A),
+    USPLKIND_A = recode(USPLKIND_A, !!!decode_mappings$USPLKIND_A),
+    PHSTAT_A = recode(PHSTAT_A, !!!decode_mappings$PHSTAT_A),
+    HYPEV_A = recode(HYPEV_A, !!!decode_mappings$HYPEV_A),
+    CHLEV_A = recode(CHLEV_A, !!!decode_mappings$CHLEV_A),
+    COPDEV_A = recode(COPDEV_A, !!!decode_mappings$COPDEV_A),
+    DIFF_A = recode(DIFF_A, !!!decode_mappings$DIFF_A),
+    VISIONDF_A = recode(VISIONDF_A, !!!decode_mappings$VISIONDF_A),
+    COGMEMDFF_A = recode(COGMEMDFF_A, !!!decode_mappings$COGMEMDFF_A),
+    PAYBLL12M_A = recode(PAYBLL12M_A, !!!decode_mappings$PAYBLL12M_A),
+    MEDDL12M_A = recode(MEDDL12M_A, !!!decode_mappings$MEDDL12M_A),
+    MEDNG12M_A = recode(MEDNG12M_A, !!!decode_mappings$MEDNG12M_A),
+    FSNAP12M_A = recode(FSNAP12M_A, !!!decode_mappings$FSNAP12M_A),
+    FWIC12M_A = recode(FWIC12M_A, !!!decode_mappings$FWIC12M_A)
+  )
+
+# Convert AGEP_A to numeric since it represents age
+filtered_combined_data <- filtered_combined_data %>% mutate(AGEP_A = as.numeric(AGEP_A))
+
+```
+
+```{r}
+# Create a named vector for the new column names
+new_column_names <- c(
+  URBRRL = "Urban-Rural",
+  REGION = "Region",
+  AGEP_A = "Age",
+  SEX_A = "Sex",
+  HISP_A = "Hispanic",
+  RACEALLP_A = "race",
+  HISPALLP_A = "race with Hispanic origin",
+  POVRATTC_A = "SA family poverty ratio (top-coded)",
+  RATCAT_A = "Ratio of family income to poverty threshold for SA's family",
+  HICOV_A = "health insurance",
+  NOTCOV_A = "Coverage status",
+  PRIVATE_A = "Private health insurance",
+  MEDICARE_A = "Medicare recode",
+  MEDICAID_A = "Medicaid recode",
+  USUALPL_A = "Have a usual place to go for care",
+  USPLKIND_A = "Type of place for usual care",
+  LASTDR_A = "Time since last saw doctor",
+  URGNT12MTC_A = "Number of times visited urgent care, past 12m, top-coded",
+  EMERG12MTC_A = "Number of times visited hospital emergency room, past 12m, top-coded",
+  PHSTAT_A = "General health status",
+  HYPEV_A = "Ever been told you had hypertension",
+  CHLEV_A = "Ever told you had high cholesterol",
+  COPDEV_A = "Ever been told you had COPD, emphysema, or chronic bronchitis",
+  DIFF_A = "Difficulty walking/steps",
+  VISIONDF_A = "Difficulty seeing",
+  COGMEMDFF_A = "Difficulty remembering/concentrating",
+  PAYBLL12M_A = "Problems paying medical bills, past 12m",
+  MEDDL12M_A = "Delayed medical care due to cost, past 12m",
+  MEDNG12M_A = "Needed medical care but did not get it due to cost, past 12m",
+  FSNAP12M_A = "Receive food stamps, past 12m",
+  FWIC12M_A = "Receive WIC benefits, past 12m",
+  year = "Year"
+)
+
+# Rename the columns in the dataset
+colnames(filtered_combined_data) <- new_column_names
+```
+
+```{r}
+colnames(acs) <- c("state", "year", "total", "white alone", 
+                   "black or african american alone", 
+                   "american indian and alaska native alone", 
+                   "asian alone", 
+                   "native hawaiian and other pacific islander alone", 
+                   "some other race alone", 
+                   "two or more races", 
+                   "two races including some other race", 
+                   "two races excluding some other race, and three or more races", 
+                   "Region")
+
+names(acs)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Create a new dataset without modifying acs
+acs_plot <- acs %>%
+  mutate(Others = `american indian and alaska native alone` +
+                 `asian alone` +
+                 `native hawaiian and other pacific islander alone` +
+                 `some other race alone` +
+                 `two races including some other race` +
+                 `two races excluding some other race, and three or more races`) %>%
+  select(Region, `white alone`, `black or african american alone`, Others) %>%
+  pivot_longer(cols = -Region, names_to = "Race", values_to = "Count")
+
+# Remove NA regions
+acs_plot <- acs_plot %>%
+  filter(!is.na(Region) & Region != "Puerto Rico")  # Exclude NA and Puerto Rico explicitly
+
+# Recalculate proportions within each region (optional but ensures accuracy)
+acs_plot <- acs_plot %>%
+  group_by(Region) %>%
+  mutate(Proportion = Count / sum(Count))
+
+# Plot
+ggplot(acs_plot, aes(x = Region, y = Proportion, fill = Race)) +
+  geom_bar(stat = "identity", position = "fill", color = NA) +  # Remove white borders
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Percentage format
+  labs(title = "Racial Distribution Across Regions (ACS Data)",
+       y = "Proportion of Population",
+       x = "Region",
+       fill = "Race Category") +
+  theme_minimal()
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+library(ggplot2)
+library(dplyr)
+
+# Prepare the data: Calculate the 'Others' category and compute proportions by Region
+acs_plot <- acs %>%
+  mutate(Others = `american indian and alaska native alone` +
+                   `asian alone` +
+                   `native hawaiian and other pacific islander alone` +
+                   `some other race alone` +
+                   `two races including some other race` +
+                   `two races excluding some other race, and three or more races`) %>%
+  select(Region, `white alone`, `black or african american alone`, Others) %>%
+  pivot_longer(cols = -Region, names_to = "Race", values_to = "Count") %>%
+  filter(!is.na(Region) & Region != "Puerto Rico") %>%  # Exclude Puerto Rico
+  group_by(Region, Race) %>%  # Group by both Region and Race
+  summarize(Count = sum(Count), .groups = "drop") %>%
+  mutate(Proportion = Count / sum(Count)) %>%  # Proportion within each region
+  ungroup()
+
+# Reorder Race categories so the largest percentage is at the top within each region
+acs_plot$Race <- factor(acs_plot$Race, 
+                        levels = rev(unique(acs_plot$Race[order(acs_plot$Proportion)])))
+
+# Create the stacked bar plot using custom colors
+ggplot(acs_plot, aes(x = Region, y = Proportion, fill = Race)) +
+  geom_bar(stat = "identity", position = "fill", color = NA, size = 0) +  # Remove borders
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Convert to percentage format
+  scale_fill_manual(values = c("white alone" = "#F8766D",  # Custom colors
+                               "black or african american alone" = "#00BA38",
+                               "Others" = "#619CFF")) +  # Match the color to 'Others'
+  labs(title = "Racial Distribution Across Regions (ACS Data)",
+       y = "Proportion of Population",
+       x = "Region",
+       fill = "Race Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+
+ggplot_build(ggplot(acs_plot, aes(x = Region, y = Proportion, fill = Race)))$data[[1]]$fill
+```
+
+
+
+
+```{r}
+names(filtered_combined_data)
+```
+```{r}
+library(dplyr)
+
+# Count the number of rows grouped by Region and Year
+population_count <- filtered_combined_data %>%
+  group_by(Region, Year) %>%
+  summarize(Population = n(), .groups = "drop")
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Count the population grouped by Region and Year
+population_count <- filtered_combined_data %>%
+  group_by(Region, Year) %>%
+  summarize(Population = n(), .groups = "drop")
+
+# Calculate the proportion for each region within each year
+population_count <- population_count %>%
+  group_by(Year) %>%
+  mutate(Proportion = Population / sum(Population))
+
+# Plot the stacked bar plot for each year
+ggplot(population_count, aes(x = factor(Year), y = Proportion, fill = Region)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Regional Population Distribution by Year-nhis",
+       y = "Proportion of Population",
+       x = "Year",
+       fill = "Region") +
+  theme_minimal()
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# Count the total population by Region and Year, excluding rows with NA in Region
+acs_population <- acs %>%
+  filter(!is.na(Region)) %>%
+  group_by(Region, year) %>%
+  summarize(Population = sum(total, na.rm = TRUE), .groups = "drop")  # Use sum() instead of n()
+
+# Calculate the proportion for each region within each year
+acs_population <- acs_population %>%
+  group_by(year) %>%
+  mutate(Proportion = Population / sum(Population))
+
+# Plot the 100% stacked bar plot for each year, grouped by Region
+ggplot(acs_population, aes(x = factor(year), y = Proportion, fill = Region)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Regional Population Distribution by Year (ACS Data)",
+       y = "Proportion of Population",
+       x = "Year",
+       fill = "Region") +
+  theme_minimal()
+library(dplyr)
+library(ggplot2)
+
+# Filter for state-level data and the entire population
+insurance_population <- insurance %>%
+  filter(geocat == 40, agecat == 0, racecat == 0, sexcat == 0, iprcat == 0, !is.na(Region)) %>%
+  group_by(Region, year) %>%
+  summarize(Population = sum(NIPR, na.rm = TRUE), .groups = "drop")  # Sum total population
+
+# Calculate the proportion of each region within each year
+insurance_population <- insurance_population %>%
+  group_by(year) %>%
+  mutate(Proportion = Population / sum(Population))
+
+# Create the 100% stacked bar plot
+ggplot(insurance_population, aes(x = factor(year), y = Proportion, fill = Region)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Regional Population Distribution by Year (Insurance Data)",
+       y = "Proportion of Population",
+       x = "Year",
+       fill = "Region") +
+  theme_minimal()
+
+```
+```{r}
+names(nanda_selected)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(ggplot2)
+
+# Filter last 10 years & remove NA regions
+regional_avg <- nanda_selected %>%
+  filter(!is.na(Region), year >= max(year) - 9) %>%  
+  group_by(Region, year) %>%
+  summarise(
+    # General Healthcare
+    Physicians_per_1000 = mean(den_allphysicians, na.rm = TRUE),
+    
+    # Mental Health Access
+    MentalHealthPhys_per_1000 = mean(den_mentalhealthphys, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = mean(den_mentalhealthclinics, na.rm = TRUE),
+    MentalHealthPractitioners_per_1000 = mean(den_mentalhealthpractitioners, na.rm = TRUE),
+
+    # Outpatient & Alternative Medicine
+    OutpatientClinics_per_1000 = mean(den_outpatientclinics, na.rm = TRUE),
+    PhysicalTherapy_per_1000 = mean(den_physicaltherapyclincs, na.rm = TRUE),
+    AltMedicine_per_1000 = mean(den_altmedicinepractitioners, na.rm = TRUE),
+
+    # Pharmacies & Medical Supplies
+    Pharmacies_per_1000 = mean(den_pharmacies, na.rm = TRUE),
+    MedicalEquipment_per_1000 = mean(den_medequipment, na.rm = TRUE),
+
+    # Residential Care & Home Health
+    ResCareFacilities_per_1000 = mean(den_allrescarefacilities, na.rm = TRUE),
+    NursingHomes_per_1000 = mean(den_resnursingfacilities, na.rm = TRUE),
+    HomeHealth_per_1000 = mean(den_homehealth, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Print summary table
+print(regional_avg)
+```
+```{r}
+# Compute the overall average across all years by region
+regional_avg_all_years <- regional_avg %>%
+  group_by(Region) %>%
+  summarise(
+    # General Healthcare
+    Physicians_per_1000 = mean(Physicians_per_1000, na.rm = TRUE),
+    
+    # Mental Health Access
+    MentalHealthPhys_per_1000 = mean(MentalHealthPhys_per_1000, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = mean(MentalHealthClinics_per_1000, na.rm = TRUE),
+    MentalHealthPractitioners_per_1000 = mean(MentalHealthPractitioners_per_1000, na.rm = TRUE),
+
+    # Outpatient & Alternative Medicine
+    OutpatientClinics_per_1000 = mean(OutpatientClinics_per_1000, na.rm = TRUE),
+    PhysicalTherapy_per_1000 = mean(PhysicalTherapy_per_1000, na.rm = TRUE),
+    AltMedicine_per_1000 = mean(AltMedicine_per_1000, na.rm = TRUE),
+
+    # Pharmacies & Medical Supplies
+    Pharmacies_per_1000 = mean(Pharmacies_per_1000, na.rm = TRUE),
+    MedicalEquipment_per_1000 = mean(MedicalEquipment_per_1000, na.rm = TRUE),
+
+    # Residential Care & Home Health
+    ResCareFacilities_per_1000 = mean(ResCareFacilities_per_1000, na.rm = TRUE),
+    NursingHomes_per_1000 = mean(NursingHomes_per_1000, na.rm = TRUE),
+    HomeHealth_per_1000 = mean(HomeHealth_per_1000, na.rm = TRUE)
+  )
+
+```
+
+```{r}
+library(ggplot2)
+
+# Physician Offices per 1000 People by Region
+ggplot(regional_avg_all_years, aes(x = Region, y = Physicians_per_1000, fill = Region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Physician Offices per 1,000 People by Region", x = "Region", y = "Density") +
+  theme_minimal()
+
+# Mental Health Clinics per 1000 People by Region
+ggplot(regional_avg_all_years, aes(x = Region, y = MentalHealthClinics_per_1000, fill = Region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Mental Health Clinics per 1,000 People by Region", x = "Region", y = "Density") +
+  theme_minimal()
+
+# Outpatient Clinics per 1000 People by Region
+ggplot(regional_avg_all_years, aes(x = Region, y = OutpatientClinics_per_1000, fill = Region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Outpatient Clinics per 1,000 People by Region", x = "Region", y = "Density") +
+  theme_minimal()
+
+# Pharmacies per 1000 People by Region
+ggplot(regional_avg_all_years, aes(x = Region, y = Pharmacies_per_1000, fill = Region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Pharmacies per 1,000 People by Region", x = "Region", y = "Density") +
+  theme_minimal()
+
+# Home Health Services per 1000 People by Region
+ggplot(regional_avg_all_years, aes(x = Region, y = HomeHealth_per_1000, fill = Region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Home Health Services per 1,000 People by Region", x = "Region", y = "Density") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(regional_avg, 
+       aes(x = year, y = Physicians_per_1000, color = Region, group = Region)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Physicians per 1000 People",
+       x = "Year", y = "Physicians per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggplot(regional_avg, 
+       aes(x = year, y = MentalHealthClinics_per_1000, color = Region, group = Region)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Mental Health Clinics per 1000 People",
+       x = "Year", y = "Mental Health Clinics per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggplot(regional_avg, 
+       aes(x = year, y = OutpatientClinics_per_1000, color = Region, group = Region)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Outpatient Clinics per 1000 People",
+       x = "Year", y = "Outpatient Clinics per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggplot(regional_avg, 
+       aes(x = year, y = Pharmacies_per_1000, color = Region, group = Region)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Pharmacies per 1000 People",
+       x = "Year", y = "Pharmacies per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggplot(regional_avg, 
+       aes(x = year, y = HomeHealth_per_1000, color = Region, group = Region)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Home Health Services per 1000 People",
+       x = "Year", y = "Home Health Services per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+# Remove rows with null or missing values for Region or Urban-Rural and compute mean densities by Region and Urban-Rural classification
+# Filter the last 10 years & remove NA for Region and Urban-Rural
+urban_rural_avg <- nanda_selected %>%
+  filter(!is.na(Region) & !is.na(`Urban-Rural`) & year >= max(year) - 9) %>%  
+  group_by(Region, `Urban-Rural`, year) %>%
+  summarise(
+    # General Healthcare
+    Physicians_per_1000 = mean(den_allphysicians, na.rm = TRUE),
+    
+    # Mental Health Access
+    MentalHealthPhys_per_1000 = mean(den_mentalhealthphys, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = mean(den_mentalhealthclinics, na.rm = TRUE),
+    MentalHealthPractitioners_per_1000 = mean(den_mentalhealthpractitioners, na.rm = TRUE),
+
+    # Outpatient & Alternative Medicine
+    OutpatientClinics_per_1000 = mean(den_outpatientclinics, na.rm = TRUE),
+    PhysicalTherapy_per_1000 = mean(den_physicaltherapyclincs, na.rm = TRUE),
+    AltMedicine_per_1000 = mean(den_altmedicinepractitioners, na.rm = TRUE),
+
+    # Pharmacies & Medical Supplies
+    Pharmacies_per_1000 = mean(den_pharmacies, na.rm = TRUE),
+    MedicalEquipment_per_1000 = mean(den_medequipment, na.rm = TRUE),
+
+    # Residential Care & Home Health
+    ResCareFacilities_per_1000 = mean(den_allrescarefacilities, na.rm = TRUE),
+    NursingHomes_per_1000 = mean(den_resnursingfacilities, na.rm = TRUE),
+    HomeHealth_per_1000 = mean(den_homehealth, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Print the summary table for Urban-Rural averages by Year
+print(urban_rural_avg)
+```
+```{r}
+# Filter the last 10 years & remove NA for Region and Urban-Rural
+urban_rural_region_avg <- nanda_selected %>%
+  filter(!is.na(Region) & !is.na(`Urban-Rural`)) %>%  # Remove rows with NA values in Region or Urban-Rural
+  group_by(Region, `Urban-Rural`) %>%
+  summarise(
+    # General Healthcare
+    Physicians_per_1000 = mean(den_allphysicians, na.rm = TRUE),
+    
+    # Mental Health Access
+    MentalHealthPhys_per_1000 = mean(den_mentalhealthphys, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = mean(den_mentalhealthclinics, na.rm = TRUE),
+    MentalHealthPractitioners_per_1000 = mean(den_mentalhealthpractitioners, na.rm = TRUE),
+
+    # Outpatient & Alternative Medicine
+    OutpatientClinics_per_1000 = mean(den_outpatientclinics, na.rm = TRUE),
+    PhysicalTherapy_per_1000 = mean(den_physicaltherapyclincs, na.rm = TRUE),
+    AltMedicine_per_1000 = mean(den_altmedicinepractitioners, na.rm = TRUE),
+
+    # Pharmacies & Medical Supplies
+    Pharmacies_per_1000 = mean(den_pharmacies, na.rm = TRUE),
+    MedicalEquipment_per_1000 = mean(den_medequipment, na.rm = TRUE),
+
+    # Residential Care & Home Health
+    ResCareFacilities_per_1000 = mean(den_allrescarefacilities, na.rm = TRUE),
+    NursingHomes_per_1000 = mean(den_resnursingfacilities, na.rm = TRUE),
+    HomeHealth_per_1000 = mean(den_homehealth, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Print the summary table for Urban-Rural averages by Region
+print(urban_rural_region_avg)
+
+```
+
+```{r}
+# Physician Offices per 1000 People by Urban-Rural Classification, Facet by Region
+ggplot(urban_rural_avg, aes(x = `Urban-Rural`, y = Physicians_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Region) +
+  labs(title = "Physician Offices per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+
+# Mental Health Clinics per 1000 People by Urban-Rural Classification, Facet by Region
+ggplot(urban_rural_avg, aes(x = `Urban-Rural`, y = MentalHealthClinics_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Region) +
+  labs(title = "Mental Health Clinics per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+
+# Outpatient Clinics per 1000 People by Urban-Rural Classification, Facet by Region
+ggplot(urban_rural_avg, aes(x = `Urban-Rural`, y = OutpatientClinics_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Region) +
+  labs(title = "Outpatient Clinics per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+
+# Pharmacies per 1000 People by Urban-Rural Classification, Facet by Region
+ggplot(urban_rural_avg, aes(x = `Urban-Rural`, y = Pharmacies_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Region) +
+  labs(title = "Pharmacies per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+
+# Home Health Services per 1000 People by Urban-Rural Classification, Facet by Region
+ggplot(urban_rural_avg, aes(x = `Urban-Rural`, y = HomeHealth_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Region) +
+  labs(title = "Home Health Services per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+
+```
+```{r}
+# Compute mean densities by Urban-Rural classification across all regions
+national_avg_urban_rural <- nanda_selected %>%
+  filter(!is.na(`Urban-Rural`) & year >= max(year) - 9) %>%  # Filter for the last 10 years
+  group_by(`Urban-Rural`) %>%
+  summarise(
+    # General Healthcare
+    Physicians_per_1000 = mean(den_allphysicians, na.rm = TRUE),
+    
+    # Mental Health Access
+    MentalHealthPhys_per_1000 = mean(den_mentalhealthphys, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = mean(den_mentalhealthclinics, na.rm = TRUE),
+    MentalHealthPractitioners_per_1000 = mean(den_mentalhealthpractitioners, na.rm = TRUE),
+
+    # Outpatient & Alternative Medicine
+    OutpatientClinics_per_1000 = mean(den_outpatientclinics, na.rm = TRUE),
+    PhysicalTherapy_per_1000 = mean(den_physicaltherapyclincs, na.rm = TRUE),
+    AltMedicine_per_1000 = mean(den_altmedicinepractitioners, na.rm = TRUE),
+
+    # Pharmacies & Medical Supplies
+    Pharmacies_per_1000 = mean(den_pharmacies, na.rm = TRUE),
+    MedicalEquipment_per_1000 = mean(den_medequipment, na.rm = TRUE),
+
+    # Residential Care & Home Health
+    ResCareFacilities_per_1000 = mean(den_allrescarefacilities, na.rm = TRUE),
+    NursingHomes_per_1000 = mean(den_resnursingfacilities, na.rm = TRUE),
+    HomeHealth_per_1000 = mean(den_homehealth, na.rm = TRUE)
+  )
+
+# Print summary table
+print(national_avg_urban_rural)
+
+```
+
+```{r}
+ggplot(national_avg_urban_rural, aes(x = `Urban-Rural`, y = Physicians_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Physician Offices per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+ggplot(national_avg_urban_rural, aes(x = `Urban-Rural`, y = MentalHealthClinics_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Mental Health Clinics per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+ggplot(national_avg_urban_rural, aes(x = `Urban-Rural`, y = OutpatientClinics_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Outpatient Clinics per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+ggplot(national_avg_urban_rural, aes(x = `Urban-Rural`, y = Pharmacies_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Pharmacies per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+ggplot(national_avg_urban_rural, aes(x = `Urban-Rural`, y = HomeHealth_per_1000, fill = `Urban-Rural`)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Home Health Services per 1,000 People by Urban-Rural Classification", x = "Urban-Rural", y = "Density") +
+  theme_minimal()
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+# Physicians per 1000 people by Urban-Rural
+# Trend of Physicians per 1000 people by Region and Urban-Rural
+ggplot(urban_rural_avg, 
+       aes(x = year, y = Physicians_per_1000, color = Region, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Physicians per 1000 People by Region and Urban-Rural",
+       x = "Year", y = "Physicians per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ `Urban-Rural`)
+
+# Trend of Mental Health Clinics per 1000 people by Region and Urban-Rural
+ggplot(urban_rural_avg, 
+       aes(x = year, y = MentalHealthClinics_per_1000, color = Region, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Mental Health Clinics per 1000 People by Region and Urban-Rural",
+       x = "Year", y = "Mental Health Clinics per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ `Urban-Rural`)
+
+# Trend of Outpatient Clinics per 1000 people by Region and Urban-Rural
+ggplot(urban_rural_avg, 
+       aes(x = year, y = OutpatientClinics_per_1000, color = Region, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Outpatient Clinics per 1000 People by Region and Urban-Rural",
+       x = "Year", y = "Outpatient Clinics per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ `Urban-Rural`)
+
+# Trend of Pharmacies per 1000 people by Region and Urban-Rural
+ggplot(urban_rural_avg, 
+       aes(x = year, y = Pharmacies_per_1000, color = Region, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Pharmacies per 1000 People by Region and Urban-Rural",
+       x = "Year", y = "Pharmacies per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ `Urban-Rural`)
+
+# Trend of Home Health Services per 1000 people by Region and Urban-Rural
+ggplot(urban_rural_avg, 
+       aes(x = year, y = HomeHealth_per_1000, color = Region, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Home Health Services per 1000 People by Region and Urban-Rural",
+       x = "Year", y = "Home Health Services per 1000 People",
+       color = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ `Urban-Rural`)
+
+
+
+```
+
+
+```{r}
+# Summing up data by Urban-Rural classification across all regions
+urban_rural_sum <- urban_rural_avg %>%
+  group_by(year, `Urban-Rural`) %>%
+  summarise(
+    Physicians_per_1000 = sum(Physicians_per_1000, na.rm = TRUE),
+    MentalHealthClinics_per_1000 = sum(MentalHealthClinics_per_1000, na.rm = TRUE),
+    OutpatientClinics_per_1000 = sum(OutpatientClinics_per_1000, na.rm = TRUE),
+    Pharmacies_per_1000 = sum(Pharmacies_per_1000, na.rm = TRUE),
+    HomeHealth_per_1000 = sum(HomeHealth_per_1000, na.rm = TRUE)
+  )
+
+# Trend of Physicians per 1000 people for Urban-Rural (representing all regions)
+ggplot(urban_rural_sum, 
+       aes(x = year, y = Physicians_per_1000, color = `Urban-Rural`, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Physicians per 1000 People",
+       x = "Year", y = "Physicians per 1000 People",
+       color = "Urban-Rural Classification") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Mental Health Clinics per 1000 people for Urban-Rural (representing all regions)
+ggplot(urban_rural_sum, 
+       aes(x = year, y = MentalHealthClinics_per_1000, color = `Urban-Rural`, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Mental Health Clinics per 1000 People",
+       x = "Year", y = "Mental Health Clinics per 1000 People",
+       color = "Urban-Rural Classification") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Outpatient Clinics per 1000 people for Urban-Rural (representing all regions)
+ggplot(urban_rural_sum, 
+       aes(x = year, y = OutpatientClinics_per_1000, color = `Urban-Rural`, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Outpatient Clinics per 1000 People",
+       x = "Year", y = "Outpatient Clinics per 1000 People",
+       color = "Urban-Rural Classification") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Pharmacies per 1000 people for Urban-Rural (representing all regions)
+ggplot(urban_rural_sum, 
+       aes(x = year, y = Pharmacies_per_1000, color = `Urban-Rural`, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Pharmacies per 1000 People",
+       x = "Year", y = "Pharmacies per 1000 People",
+       color = "Urban-Rural Classification") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Home Health Services per 1000 people for Urban-Rural (representing all regions)
+ggplot(urban_rural_sum, 
+       aes(x = year, y = HomeHealth_per_1000, color = `Urban-Rural`, group = `Urban-Rural`)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Trend of Home Health Services per 1000 People",
+       x = "Year", y = "Home Health Services per 1000 People",
+       color = "Urban-Rural Classification") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+
+```{r}
+names(AHRF18_22)
+```
+
+```{r}
+# Filter out rows where Region is "All States" or NULL/empty
+filtered_data <- AHRF18_22 %>%
+  filter(!is.na(Region) & Region != "All States")
+
+# Now, summarize the data by region
+region_summary <- filtered_data %>%
+  group_by(Region) %>%
+  summarise(
+    Hispanic_N = sum(`Hispanic or Latino (N)`, na.rm = TRUE),
+    White_N = sum(`White* (N)`, na.rm = TRUE),
+    Black_N = sum(`Black or African American* (N)`, na.rm = TRUE),
+    Asian_N = sum(`Asian* (N)`, na.rm = TRUE),
+    Native_Hawaiian_N = sum(`Native Hawaiian or Other Pacific Islander* (N)`, na.rm = TRUE),
+    American_Indian_N = sum(`American Indian or Alaska Native* (N)`, na.rm = TRUE),
+    Other_N = sum(`Other or Multiple Races* (N)`, na.rm = TRUE),
+    Male_N = sum(`Male (N)`, na.rm = TRUE),
+    Female_N = sum(`Female (N)`, na.rm = TRUE)
+  )
+
+# View the region summary
+print(region_summary)
+```
+```{r}
+# Filter for "All States" using Geography Code "91"
+us_summary <- AHRF18_22 %>%
+  filter(`Geography Code` == "91") %>%
+  summarise(
+    Hispanic_N = sum(`Hispanic or Latino (N)`, na.rm = TRUE),
+    White_N = sum(`White* (N)`, na.rm = TRUE),
+    Black_N = sum(`Black or African American* (N)`, na.rm = TRUE),
+    Asian_N = sum(`Asian* (N)`, na.rm = TRUE),
+    Native_Hawaiian_N = sum(`Native Hawaiian or Other Pacific Islander* (N)`, na.rm = TRUE),
+    American_Indian_N = sum(`American Indian or Alaska Native* (N)`, na.rm = TRUE),
+    Other_N = sum(`Other or Multiple Races* (N)`, na.rm = TRUE),
+    Male_N = sum(`Male (N)`, na.rm = TRUE),
+    Female_N = sum(`Female (N)`, na.rm = TRUE)
+  )
+
+# View the combined US summary
+print(us_summary)
+
+```
+
+```{r}
+# Get unique values from the 'Occupation Name' column
+unique_occupation_names <- unique(AHRF18_22$`Occupation Name`)
+
+# View the unique occupation names
+print(unique_occupation_names)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Summarize the data by region and occupation name, using Total Count
+occupation_summary <- AHRF18_22 %>%
+  filter(!is.na(Region)) %>%  # Remove rows where Region is NA
+  group_by(Region, `Occupation Name`) %>%
+  summarise(occupation_count = sum(`Total Count`, na.rm = TRUE), .groups = 'drop')
+
+# Create a list of unique occupation names
+occupation_names <- unique(occupation_summary$`Occupation Name`)
+
+# Loop through each occupation and create a separate plot
+for (occupation in occupation_names) {
+  # Filter data for the current occupation
+  current_data <- occupation_summary %>% filter(`Occupation Name` == occupation)
+  
+  # Create the plot for the current occupation using Total Count
+  p <- ggplot(current_data, aes(x = Region, y = occupation_count, fill = Region)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(
+      title = paste("Occupation Count for", occupation),
+      x = "Region",
+      y = "Total Count of Occupations"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+  
+  # Print the plot
+  print(p)
+}
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Aggregate total population for each region from ACS dataset
+acs_2022 <- acs %>%
+  filter(year == 2022) %>%
+  group_by(Region) %>%
+  summarise(total_population = sum(total, na.rm = TRUE), .groups = 'drop')
+
+# Summarize the AHRF data by Region and Occupation Name using Total Count
+occupation_summary <- AHRF18_22 %>%
+  filter(!is.na(Region)) %>%  # Remove rows with NA regions
+  group_by(Region, `Occupation Name`) %>%
+  summarise(occupation_count = sum(`Total Count`, na.rm = TRUE), .groups = 'drop')
+
+# Join the occupation summary with aggregated ACS data to get population for each region
+occupation_summary <- occupation_summary %>%
+  left_join(acs_2022, by = "Region") %>%
+  mutate(density = occupation_count / total_population)  # Calculate density (count/population)
+
+# Create a list of unique occupation names
+occupation_names <- unique(occupation_summary$`Occupation Name`)
+
+# Loop through each occupation and create a separate plot for density
+for (occupation in occupation_names) {
+  # Filter data for the current occupation
+  current_data <- occupation_summary %>% filter(`Occupation Name` == occupation)
+  
+  # Create the plot for the current occupation using density (count/population)
+  p <- ggplot(current_data, aes(x = Region, y = density, fill = Region)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(
+      title = paste("Density of Occupation for", occupation),
+      x = "Region",
+      y = "Density (Count / Population)"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+  
+  # Print the plot
+  print(p)
+}
+
+```
+
+
+```{r}
+# Create a full state name to region mapping
+full_to_region <- setNames(state_to_region[names(abbreviation_to_full)], abbreviation_to_full)
+
+# Apply it to the ACS data
+acs$Region <- full_to_region[acs$state]
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Clean up column names
+colnames(acs) <- trimws(colnames(acs))
+
+# Filter to rows where Region is not NA
+acs_clean <- acs %>% 
+  filter(!is.na(Region)) %>%
+  mutate(`total:` = as.numeric(`total:`)) # Ensure total is numeric
+overall_trend <- acs_clean %>%
+  group_by(year) %>%
+  summarise(total_population = sum(`total:`))
+
+ggplot(overall_trend, aes(x = year, y = total_population)) +
+  geom_line(color = "steelblue", size = 1.2) +
+  labs(title = "Overall Population Trend (All Regions)",
+       x = "Year", y = "Total Population") +
+  theme_minimal()
+region_trends <- acs_clean %>%
+  group_by(year, Region) %>%
+  summarise(total_population = sum(`total:`), .groups = "drop")
+
+ggplot(region_trends, aes(x = year, y = total_population, color = Region)) +
+  geom_line(size = 1.1) +
+  labs(title = "Population Trend by Region",
+       x = "Year", y = "Total Population") +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
